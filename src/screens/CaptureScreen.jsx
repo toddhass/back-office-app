@@ -66,6 +66,8 @@ export default function CaptureScreen({ onDone }) {
       itemCount: lineItems?.length || 0,
       needsReview: (lineItems || []).filter((i) => i.needs_review).length,
       total: invoiceRow?.invoice_total || 0,
+      matchedExistingSupplier: data?.matched_existing_supplier || null,
+      rawSupplierName: invoiceRow?.raw_extraction?.supplier_name || null,
     });
     setStatus("done");
   }
@@ -159,6 +161,11 @@ export default function CaptureScreen({ onDone }) {
             <CheckCircle2 size={30} color={good} />
             <div style={{ fontWeight: 600, fontSize: 16 }}>Invoice added</div>
             <div style={{ fontSize: 13, color: textMuted }}>{result.supplier}</div>
+            {result.matchedExistingSupplier && (
+              <div style={{ fontSize: 11, color: accent, maxWidth: 260 }}>
+                Matched to existing supplier — invoice read as "{result.rawSupplierName}"
+              </div>
+            )}
             <div style={{ display: "flex", gap: 20, marginTop: 4 }}>
               <div>
                 <div style={{ fontFamily: mono, fontSize: 18, color: accent }}>{result.itemCount}</div>
