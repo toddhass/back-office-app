@@ -156,7 +156,10 @@ export default function InvoicesScreen() {
 
       const newStock = (current?.current_stock || 0) + (item.quantity || 0);
 
-      await supabase.from("inventory_items").update({ current_stock: newStock }).eq("id", item.inventory_item_id);
+      await supabase
+        .from("inventory_items")
+        .update({ current_stock: newStock, last_reorder_sent_at: null })
+        .eq("id", item.inventory_item_id);
       await supabase.from("stock_transactions").insert({
         inventory_item_id: item.inventory_item_id,
         change: item.quantity,

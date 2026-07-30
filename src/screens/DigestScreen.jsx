@@ -22,7 +22,10 @@ export default function DigestScreen() {
   const [sent, setSent] = useState({});
 
   useEffect(() => {
-    async function load() {
+    load();
+  }, [RESTAURANT_ID]);
+
+  async function load() {
       if (!RESTAURANT_ID) return;
       setLoading(true);
       // Items below par. Note: inventory_items isn't linked to a supplier directly in
@@ -35,7 +38,12 @@ export default function DigestScreen() {
         .eq("restaurant_id", RESTAURANT_ID)
         .not("par_level", "is", null);
 
-      const belowPar = (items || []).filter((i) => i.current_stock <= i.par_level);
+      // Below par AND not already flagged as sent since it last dipped below par.
+      // A restock (handled in InvoicesScreen's postToInventory) clears
+      // last_reorder_sent_at, so this re-surfaces the item if it dips again.
+      const belowPar = (items || []).filter(
+        (i) => i.current_stock <= i.par_level && !i.last_reorder_sent_at
+      );
 
       const grouped = {};
       for (const item of belowPar) {
@@ -57,9 +65,7 @@ export default function DigestScreen() {
       setExpanded(Object.fromEntries(groupList.map((g) => [g.supplier, true])));
       setDrafts(Object.fromEntries(groupList.map((g) => [g.supplier, draftMessage(g.supplier, g.items)])));
       setLoading(false);
-    }
-    load();
-  }, [RESTAURANT_ID]);
+  }
 
   function toggleGroup(supplier) {
     setExpanded((e) => ({ ...e, [supplier]: !e[supplier] }));
@@ -68,6 +74,20 @@ export default function DigestScreen() {
     navigator.clipboard?.writeText(drafts[supplier]);
     setCopied(supplier);
     setTimeout(() => setCopied(null), 1500);
+  }
+  async function markSent(group) {
+    const itemIds = group.items.map((i) => i.id);
+    const { error } = await supabase
+      .from("inventory_items")
+      .update({ last_reorder_sent_at: new Date().toISOString() })
+      .in("id", itemIds);
+
+    if (!error) {
+      setSent((s) => ({ ...s, [group.supplier]: true }));
+      // Remove this group from the list after a brief pause so the
+      // "Sent" state is visible before it disappears on next reload.
+      setGroups((prev) => prev.map((g) => (g.supplier === group.supplier ? { ...g, justSent: true } : g)));
+    }
   }
 
   if (loading) return <div style={{ padding: 24, color: textMuted }}>Loading…</div>;
@@ -171,7 +191,7 @@ export default function DigestScreen() {
                       {copied === group.supplier ? "Copied" : "Copy"}
                     </button>
                     <button
-                      onClick={() => setSent((s) => ({ ...s, [group.supplier]: true }))}
+                      onClick={() => markSent(group)}
                       disabled={isSent}
                       style={{
                         flex: 1,
