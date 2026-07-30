@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, Copy, Check, ChevronDown, ChevronUp, Send } from "lucide-react";
+import { AlertTriangle, Copy, Check, ChevronDown, ChevronUp, Send, Pencil, MessageCircle } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, mono } from "../lib/tokens";
@@ -20,6 +20,7 @@ export default function DigestScreen() {
   const [drafts, setDrafts] = useState({});
   const [copied, setCopied] = useState(null);
   const [sent, setSent] = useState({});
+  const [editingParId, setEditingParId] = useState(null);
 
   useEffect(() => {
     load();
@@ -49,18 +50,19 @@ export default function DigestScreen() {
       for (const item of belowPar) {
         const { data: lastLine } = await supabase
           .from("invoice_line_items")
-          .select("invoice_id, invoices(supplier_id, suppliers(name))")
+          .select("invoice_id, invoices(supplier_id, suppliers(name, phone))")
           .eq("inventory_item_id", item.id)
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
 
         const supplierName = lastLine?.invoices?.suppliers?.name || "Unassigned";
-        if (!grouped[supplierName]) grouped[supplierName] = [];
-        grouped[supplierName].push(item);
+        const supplierPhone = lastLine?.invoices?.suppliers?.phone || null;
+        if (!grouped[supplierName]) grouped[supplierName] = { items: [], phone: supplierPhone };
+        grouped[supplierName].items.push(item);
       }
 
-      const groupList = Object.entries(grouped).map(([supplier, items]) => ({ supplier, items }));
+      const groupList = Object.entries(grouped).map(([supplier, g]) => ({ supplier, items: g.items, phone: g.phone }));
       setGroups(groupList);
       setExpanded(Object.fromEntries(groupList.map((g) => [g.supplier, true])));
       setDrafts(Object.fromEntries(groupList.map((g) => [g.supplier, draftMessage(g.supplier, g.items)])));
@@ -74,6 +76,15 @@ export default function DigestScreen() {
     navigator.clipboard?.writeText(drafts[supplier]);
     setCopied(supplier);
     setTimeout(() => setCopied(null), 1500);
+  }
+  async function updateParLevel(itemId, value) {
+    const numValue = parseFloat(value);
+    if (isNaN(numValue)) return;
+    await supabase.from("inventory_items").update({ par_level: numValue }).eq("id", itemId);
+    setGroups((prev) =>
+      prev.map((g) => ({ ...g, items: g.items.map((i) => (i.id === itemId ? { ...i, par_level: numValue } : i)) }))
+    );
+    setEditingParId(null);
   }
   async function markSent(group) {
     const itemIds = group.items.map((i) => i.id);
@@ -152,9 +163,27 @@ export default function DigestScreen() {
                           <AlertTriangle size={13} color={item.current_stock === 0 ? danger : accent} />
                           <div>
                             <div style={{ fontSize: 13 }}>{item.name}</div>
-                            <div style={{ fontSize: 11, color: textMuted, fontFamily: mono }}>
-                              {item.current_stock} / {item.par_level} {item.unit}
-                            </div>
+                            {editingParId === item.id ? (
+                              <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
+                                <span style={{ fontSize: 11, color: textMuted, fontFamily: mono }}>{item.current_stock} / </span>
+                                <input
+                                  type="number"
+                                  defaultValue={item.par_level}
+                                  autoFocus
+                                  onBlur={(e) => updateParLevel(item.id, e.target.value)}
+                                  onKeyDown={(e) => e.key === "Enter" && updateParLevel(item.id, e.target.value)}
+                                  style={{ width: 40, background: "#1C1B1A", border: "1px solid #45413A", borderRadius: 4, padding: "2px 4px", color: textPrimary, fontSize: 11, fontFamily: mono }}
+                                />
+                                <span style={{ fontSize: 11, color: textMuted }}>{item.unit}</span>
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: 11, color: textMuted, fontFamily: mono, display: "flex", alignItems: "center", gap: 4 }}>
+                                {item.current_stock} / {item.par_level} {item.unit}
+                                <button onClick={() => setEditingParId(item.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", padding: 1 }}>
+                                  <Pencil size={10} />
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div style={{ fontFamily: mono, fontSize: 13, color: accent, fontWeight: 600 }}>+{suggestQty(item)}</div>
@@ -190,6 +219,15 @@ export default function DigestScreen() {
                       {copied === group.supplier ? <Check size={14} /> : <Copy size={14} />}
                       {copied === group.supplier ? "Copied" : "Copy"}
                     </button>
+                    {group.phone && (
+                      <a
+                        href={`sms:${group.phone}&body=${encodeURIComponent(drafts[group.supplier] || "")}`}
+                        style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "none", border: `1px solid ${accent}`, borderRadius: 8, padding: "10px", color: accent, fontSize: 13, textDecoration: "none" }}
+                      >
+                        <MessageCircle size={14} />
+                        Text
+                      </a>
+                    )}
                     <button
                       onClick={() => markSent(group)}
                       disabled={isSent}

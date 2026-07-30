@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, Camera, AlertTriangle, Plus, ArrowLeft } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Camera, AlertTriangle, Plus, ArrowLeft, Search, Pencil } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { bg, card, textPrimary, textMuted, accent, danger, good, mono } from "../lib/tokens";
@@ -49,6 +49,11 @@ export default function InvoicesScreen() {
   const [cardIndex, setCardIndex] = useState(0);
   const [newItemName, setNewItemName] = useState("");
   const [showNewForm, setShowNewForm] = useState(false);
+  const [invoicePhotoUrl, setInvoicePhotoUrl] = useState(null);
+  const [showInvoicePhoto, setShowInvoicePhoto] = useState(false);
+  const [editingQty, setEditingQty] = useState(false);
+  const [historySearch, setHistorySearch] = useState("");
+  const [vendorPhone, setVendorPhone] = useState("");
 
   async function loadPendingList() {
     if (!RESTAURANT_ID) return;
@@ -109,8 +114,32 @@ export default function InvoicesScreen() {
     setVendorSelection(null);
     setShowNewVendorConfirm(false);
     setNewVendorConfirmName("");
+    setShowInvoicePhoto(false);
+    setEditingQty(false);
     setView("detail");
     setLoading(false);
+
+    if (inv?.file_url) {
+      const { data: signed } = await supabase.storage.from("invoices").createSignedUrl(inv.file_url, 600);
+      setInvoicePhotoUrl(signed?.signedUrl || null);
+    } else {
+      setInvoicePhotoUrl(null);
+    }
+  }
+
+  async function updateLineItemValue(itemId, field, value) {
+    const numValue = parseFloat(value);
+    if (isNaN(numValue)) return;
+    const updated = { [field]: numValue };
+    // Keep line_total consistent if the user corrects quantity or unit price
+    const item = lineItems.find((i) => i.id === itemId);
+    if (item) {
+      const qty = field === "quantity" ? numValue : item.quantity;
+      const price = field === "unit_price" ? numValue : item.unit_price;
+      if (qty != null && price != null) updated.line_total = +(qty * price).toFixed(2);
+    }
+    await supabase.from("invoice_line_items").update(updated).eq("id", itemId);
+    setLineItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, ...updated } : i)));
   }
 
   async function loadHistory() {
@@ -142,7 +171,7 @@ export default function InvoicesScreen() {
     if (!RESTAURANT_ID) return;
     const { data } = await supabase
       .from("suppliers")
-      .select("id, name")
+      .select("id, name, phone")
       .eq("restaurant_id", RESTAURANT_ID)
       .order("name", { ascending: true });
     setSuppliersList(data || []);
@@ -168,12 +197,13 @@ export default function InvoicesScreen() {
 
     const { error } = await supabase
       .from("suppliers")
-      .insert({ restaurant_id: RESTAURANT_ID, name: newVendorName.trim() });
+      .insert({ restaurant_id: RESTAURANT_ID, name: newVendorName.trim(), phone: vendorPhone.trim() || null });
 
     if (error) {
       setAddVendorError(error.message);
     } else {
       setNewVendorName("");
+      setVendorPhone("");
       setShowAddVendor(false);
       loadSuppliers();
     }
@@ -199,13 +229,14 @@ export default function InvoicesScreen() {
 
     const { data: created, error: createError } = await supabase
       .from("suppliers")
-      .insert({ restaurant_id: RESTAURANT_ID, name: newVendorConfirmName.trim() })
+      .insert({ restaurant_id: RESTAURANT_ID, name: newVendorConfirmName.trim(), phone: vendorPhone.trim() || null })
       .select("id")
       .single();
 
     if (!createError && created) {
       await supabase.from("invoices").update({ supplier_id: created.id }).eq("id", invoice.id);
       setInvoice((prev) => ({ ...prev, supplier_id: created.id }));
+      setVendorPhone("");
       loadSuppliers();
       loadInvoiceDetail(invoice.id);
     }
@@ -285,6 +316,7 @@ export default function InvoicesScreen() {
     if (cardIndex < reviewItems.length - 1) {
       setCardIndex((c) => c + 1);
       setShowNewForm(false);
+      setEditingQty(false);
     }
   }
 
@@ -361,6 +393,12 @@ export default function InvoicesScreen() {
                 onChange={(e) => setNewVendorName(e.target.value)}
                 style={{ width: "100%", background: "#1C1B1A", border: "1px solid #45413A", borderRadius: 6, padding: "8px 10px", color: textPrimary, fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
               />
+              <input
+                placeholder="Phone (optional)"
+                value={vendorPhone}
+                onChange={(e) => setVendorPhone(e.target.value)}
+                style={{ width: "100%", background: "#1C1B1A", border: "1px solid #45413A", borderRadius: 6, padding: "8px 10px", color: textPrimary, fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
+              />
               {addVendorError && <div style={{ color: danger, fontSize: 12, marginBottom: 8 }}>{addVendorError}</div>}
               <button
                 onClick={addVendor}
@@ -389,7 +427,7 @@ export default function InvoicesScreen() {
                   key={s.id}
                   style={{ fontSize: 12, color: textMuted, background: "#2C2A26", border: "1px solid #35322D", borderRadius: 20, padding: "5px 12px" }}
                 >
-                  {s.name}
+                  {s.name}{s.phone ? ` · ${s.phone}` : ""}
                 </span>
               ))}
             </div>
@@ -400,6 +438,18 @@ export default function InvoicesScreen() {
           Invoice history
         </div>
 
+        {historyList.length > 0 && (
+          <div style={{ padding: "0 16px 8px", position: "relative" }}>
+            <Search size={14} color={textMuted} style={{ position: "absolute", left: 28, top: "50%", transform: "translateY(-50%)" }} />
+            <input
+              placeholder="Search by vendor…"
+              value={historySearch}
+              onChange={(e) => setHistorySearch(e.target.value)}
+              style={{ width: "100%", background: card, border: "1px solid #35322D", borderRadius: 8, padding: "9px 10px 9px 32px", color: textPrimary, fontSize: 13, boxSizing: "border-box" }}
+            />
+          </div>
+        )}
+
         {historyLoading && <div style={{ padding: "20px 16px", color: textMuted }}>Loading…</div>}
 
         {!historyLoading && historyList.length === 0 && (
@@ -409,7 +459,9 @@ export default function InvoicesScreen() {
         )}
 
         <div style={{ padding: "8px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-          {historyList.map((inv) => (
+          {historyList
+            .filter((inv) => (inv.suppliers?.name || "Unknown supplier").toLowerCase().includes(historySearch.toLowerCase()))
+            .map((inv) => (
             <button
               key={inv.id}
               onClick={() => {
@@ -678,6 +730,12 @@ export default function InvoicesScreen() {
                   onChange={(e) => setNewVendorConfirmName(e.target.value)}
                   style={{ width: "100%", background: "#1C1B1A", border: "1px solid #45413A", borderRadius: 6, padding: "8px 10px", color: textPrimary, fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
                 />
+                <input
+                  placeholder="Phone (optional)"
+                  value={vendorPhone}
+                  onChange={(e) => setVendorPhone(e.target.value)}
+                  style={{ width: "100%", background: "#1C1B1A", border: "1px solid #45413A", borderRadius: 6, padding: "8px 10px", color: textPrimary, fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
+                />
                 <button
                   onClick={confirmNewVendorFromInvoice}
                   disabled={!newVendorConfirmName.trim() || confirmingVendor}
@@ -731,6 +789,19 @@ export default function InvoicesScreen() {
         </div>
       </div>
 
+      <div style={{ padding: "8px 16px 0" }}>
+        <button
+          onClick={() => setShowInvoicePhoto((s) => !s)}
+          disabled={!invoicePhotoUrl}
+          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "none", border: "1px dashed #45413A", borderRadius: 8, padding: "10px", color: invoicePhotoUrl ? textMuted : "#4A473F", fontSize: 12, cursor: invoicePhotoUrl ? "pointer" : "not-allowed" }}
+        >
+          <Camera size={13} /> {showInvoicePhoto ? "Hide" : "View"} original invoice photo
+        </button>
+        {showInvoicePhoto && invoicePhotoUrl && (
+          <img src={invoicePhotoUrl} alt="Invoice" style={{ width: "100%", borderRadius: 8, marginTop: 8, border: "1px solid #35322D" }} />
+        )}
+      </div>
+
       <div style={{ padding: "12px 16px 4px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ fontSize: 12, color: textMuted, fontFamily: mono }}>
           ITEM {cardIndex + 1} / {reviewItems.length}
@@ -742,9 +813,36 @@ export default function InvoicesScreen() {
         <div style={{ padding: "8px 16px" }}>
           <div style={{ background: card, border: "1px solid #35322D", borderRadius: 10, padding: 18 }}>
             <div style={{ fontFamily: mono, fontSize: 15, marginBottom: 4 }}>"{currentItem.raw_description}"</div>
-            <div style={{ color: textMuted, fontSize: 13, marginBottom: 14 }}>
-              {currentItem.quantity} {currentItem.unit} &middot; ${Number(currentItem.line_total || 0).toFixed(2)}
-            </div>
+            {!editingQty ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                <div style={{ color: textMuted, fontSize: 13 }}>
+                  {currentItem.quantity} {currentItem.unit} &middot; ${Number(currentItem.line_total || 0).toFixed(2)}
+                </div>
+                <button onClick={() => setEditingQty(true)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", padding: 2 }}>
+                  <Pencil size={12} />
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center" }}>
+                <input
+                  type="number"
+                  defaultValue={currentItem.quantity}
+                  onBlur={(e) => updateLineItemValue(currentItem.id, "quantity", e.target.value)}
+                  style={{ width: 60, background: "#1C1B1A", border: "1px solid #45413A", borderRadius: 6, padding: "6px 8px", color: textPrimary, fontSize: 13 }}
+                />
+                <span style={{ color: textMuted, fontSize: 13 }}>{currentItem.unit} @ $</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  defaultValue={currentItem.unit_price}
+                  onBlur={(e) => updateLineItemValue(currentItem.id, "unit_price", e.target.value)}
+                  style={{ width: 70, background: "#1C1B1A", border: "1px solid #45413A", borderRadius: 6, padding: "6px 8px", color: textPrimary, fontSize: 13 }}
+                />
+                <button onClick={() => setEditingQty(false)} style={{ background: accent, border: "none", borderRadius: 6, padding: "6px 10px", color: "#1C1B1A", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  Done
+                </button>
+              </div>
+            )}
             <TicketDivider />
             <div style={{ fontSize: 12, color: textMuted, textTransform: "uppercase", letterSpacing: 1, margin: "10px 0 8px" }}>
               Is this
@@ -871,14 +969,14 @@ export default function InvoicesScreen() {
 
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10 }}>
             <button
-              onClick={() => setCardIndex((c) => Math.max(0, c - 1))}
+              onClick={() => { setCardIndex((c) => Math.max(0, c - 1)); setEditingQty(false); }}
               disabled={cardIndex === 0}
               style={{ background: "none", border: "none", color: textMuted, display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 13 }}
             >
               <ChevronLeft size={14} /> Prev
             </button>
             <button
-              onClick={() => setCardIndex((c) => Math.min(reviewItems.length - 1, c + 1))}
+              onClick={() => { setCardIndex((c) => Math.min(reviewItems.length - 1, c + 1)); setEditingQty(false); }}
               disabled={cardIndex === reviewItems.length - 1}
               style={{ background: "none", border: "none", color: textMuted, display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 13 }}
             >

@@ -10,6 +10,10 @@ export default function CaptureScreen({ onDone }) {
   const [fileName, setFileName] = useState(null);
   const [result, setResult] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
+  const [batchResults, setBatchResults] = useState([]);
+  const [batchTotal, setBatchTotal] = useState(0);
+  const [batchCurrent, setBatchCurrent] = useState(0);
+  const [batchFileName, setBatchFileName] = useState("");
   const fileInputRef = useRef(null);
 
   async function handleFileSelect(e) {
@@ -71,6 +75,72 @@ export default function CaptureScreen({ onDone }) {
       rawSupplierName: invoiceRow?.raw_extraction?.supplier_name || null,
     });
     setStatus("done");
+  }
+
+  async function extractSingleFile(file) {
+    const path = `${RESTAURANT_ID}/${Date.now()}-${file.name}`;
+    const { error: uploadError } = await supabase.storage.from("invoices").upload(path, file);
+    if (uploadError) {
+      return { fileName: file.name, ok: false, detail: uploadError.message };
+    }
+
+    const { data, error: fnError } = await supabase.functions.invoke("extract-invoice", {
+      body: { restaurant_id: RESTAURANT_ID, storage_path: path },
+    });
+
+    if (fnError) {
+      let detail = fnError.message;
+      try {
+        if (fnError.context && typeof fnError.context.json === "function") {
+          const body = await fnError.context.json();
+          detail = body?.error || detail;
+        }
+      } catch (_) {}
+      const isDuplicate = detail?.startsWith("Duplicate:");
+      return { fileName: file.name, ok: false, duplicate: isDuplicate, detail };
+    }
+
+    const { data: invoiceRow } = await supabase
+      .from("invoices")
+      .select("*, suppliers(name)")
+      .eq("id", data.invoice_id)
+      .single();
+
+    return {
+      fileName: file.name,
+      ok: true,
+      supplier: invoiceRow?.suppliers?.name || invoiceRow?.raw_extraction?.supplier_name || "Unknown",
+      total: invoiceRow?.invoice_total || 0,
+    };
+  }
+
+  async function handleBatchFileSelect(e) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    setStatus("batch-processing");
+    setBatchTotal(files.length);
+    setBatchCurrent(0);
+    setBatchResults([]);
+
+    const results = [];
+    for (let i = 0; i < files.length; i++) {
+      setBatchCurrent(i + 1);
+      setBatchFileName(files[i].name);
+      const result = await extractSingleFile(files[i]);
+      results.push(result);
+      setBatchResults([...results]);
+    }
+
+    setStatus("batch-done");
+  }
+
+  function resetBatch() {
+    setStatus("idle");
+    setBatchResults([]);
+    setBatchTotal(0);
+    setBatchCurrent(0);
+    setBatchFileName("");
   }
 
   function reset() {
@@ -140,8 +210,8 @@ export default function CaptureScreen({ onDone }) {
               }}
             >
               <ImageIcon size={15} />
-              Choose from library or PDF
-              <input type="file" accept="image/*,application/pdf" onChange={handleFileSelect} style={{ display: "none" }} />
+              Choose from library or PDF (multiple OK)
+              <input type="file" accept="image/*,application/pdf" multiple onChange={handleBatchFileSelect} style={{ display: "none" }} />
             </label>
           </div>
         )}
@@ -213,6 +283,71 @@ export default function CaptureScreen({ onDone }) {
               </button>
             </div>
           )
+        )}
+        {status === "batch-processing" && (
+          <div style={{ background: card, border: "1px solid #35322D", borderRadius: 14, padding: "36px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 16, textAlign: "center" }}>
+            <Loader2 size={30} color={accent} style={{ animation: "spin 1s linear infinite" }} />
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>
+                Processing {batchCurrent} of {batchTotal}…
+              </div>
+              <div style={{ fontSize: 12, color: textMuted, marginTop: 4, fontFamily: mono }}>{batchFileName}</div>
+            </div>
+            {batchResults.length > 0 && (
+              <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 4, textAlign: "left" }}>
+                {batchResults.map((r, i) => (
+                  <div key={i} style={{ fontSize: 11, color: r.ok ? good : r.duplicate ? accent : danger, fontFamily: mono }}>
+                    {r.ok ? "✓" : r.duplicate ? "⊙" : "✗"} {r.fileName}
+                  </div>
+                ))}
+              </div>
+            )}
+            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+          </div>
+        )}
+
+        {status === "batch-done" && (
+          <div style={{ background: card, border: `1px solid ${good}`, borderRadius: 14, padding: "24px 22px", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" }}>
+            <CheckCircle2 size={30} color={good} />
+            <div style={{ fontWeight: 600, fontSize: 16 }}>
+              {batchResults.filter((r) => r.ok).length} of {batchTotal} invoices added
+            </div>
+            <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+              {batchResults.map((r, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    background: "#2C2A26",
+                    borderRadius: 8,
+                    padding: "8px 10px",
+                    fontSize: 12,
+                  }}
+                >
+                  <div style={{ textAlign: "left" }}>
+                    <div style={{ color: textPrimary }}>{r.ok ? r.supplier : r.fileName}</div>
+                    <div style={{ color: textMuted, fontSize: 11, fontFamily: mono }}>
+                      {r.ok ? `$${Number(r.total).toFixed(2)}` : r.duplicate ? "Already uploaded" : "Failed to read"}
+                    </div>
+                  </div>
+                  <div style={{ color: r.ok ? good : r.duplicate ? accent : danger }}>
+                    {r.ok ? "✓" : r.duplicate ? "⊙" : "✗"}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={onDone}
+              style={{ width: "100%", marginTop: 12, background: accent, border: "none", borderRadius: 10, padding: "13px", color: "#1C1B1A", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+            >
+              Review now
+            </button>
+            <button onClick={resetBatch} style={{ width: "100%", background: "none", border: "none", color: textMuted, fontSize: 13, padding: "6px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              <RotateCcw size={13} /> Upload more
+            </button>
+          </div>
         )}
       </div>
     </div>

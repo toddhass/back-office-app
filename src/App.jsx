@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Camera, Receipt, ClipboardList, LogOut } from "lucide-react";
+import { Camera, Receipt, ClipboardList, LogOut, Home } from "lucide-react";
+import HomeScreen from "./screens/HomeScreen";
 import CaptureScreen from "./screens/CaptureScreen";
 import InvoicesScreen from "./screens/InvoicesScreen";
 import DigestScreen from "./screens/DigestScreen";
@@ -10,7 +11,7 @@ import { bg, sans, textMuted, accent, danger, card, textPrimary } from "./lib/to
 
 export default function App() {
   const { session, restaurantId, restaurantName, loading } = useAuth();
-  const [tab, setTab] = useState("capture");
+  const [tab, setTab] = useState("home");
 
   if (loading) {
     return <div style={{ background: bg, minHeight: "100vh", color: textMuted, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: sans }}>Loading…</div>;
@@ -34,6 +35,7 @@ export default function App() {
   }
 
   const tabs = [
+    { key: "home", label: "Home", icon: Home },
     { key: "capture", label: "Capture", icon: Camera },
     { key: "invoices", label: "Invoices", icon: Receipt },
     { key: "digest", label: "Reorder", icon: ClipboardList },
@@ -61,6 +63,7 @@ export default function App() {
           </button>
         </div>
         <div style={{ paddingBottom: 76 }}>
+          {tab === "home" && <HomeScreen onNavigate={setTab} />}
           {tab === "capture" && <CaptureScreen onDone={() => setTab("invoices")} />}
           {tab === "invoices" && <InvoicesScreen />}
           {tab === "digest" && <DigestScreen />}
