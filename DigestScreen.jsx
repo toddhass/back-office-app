@@ -1,0 +1,204 @@
+import { useEffect, useState } from "react";
+import { AlertTriangle, Copy, Check, ChevronDown, ChevronUp, Send } from "lucide-react";
+import { supabase } from "../lib/supabaseClient";
+import { useAuth } from "../lib/AuthContext";
+import { card, textPrimary, textMuted, accent, danger, good, mono } from "../lib/tokens";
+
+function suggestQty(item) {
+  return Math.ceil(item.par_level - item.current_stock);
+}
+function draftMessage(supplierName, items) {
+  const lines = items.map((i) => `${suggestQty(i)} ${i.unit}${suggestQty(i) > 1 ? "s" : ""} ${i.name.split(",")[0]}`);
+  return `Hi ${supplierName.split(" ")[0]} team — could we get:\n${lines.map((l) => `• ${l}`).join("\n")}\nThanks!`;
+}
+
+export default function DigestScreen() {
+  const { restaurantId: RESTAURANT_ID } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [groups, setGroups] = useState([]); // [{ supplier, items }]
+  const [expanded, setExpanded] = useState({});
+  const [drafts, setDrafts] = useState({});
+  const [copied, setCopied] = useState(null);
+  const [sent, setSent] = useState({});
+
+  useEffect(() => {
+    async function load() {
+      if (!RESTAURANT_ID) return;
+      setLoading(true);
+      // Items below par. Note: inventory_items isn't linked to a supplier directly in
+      // the current schema — this groups by the item's most recent supplier via
+      // invoice_line_items -> invoices -> suppliers. If an item has no invoice history,
+      // it's grouped under "Unassigned".
+      const { data: items } = await supabase
+        .from("inventory_items")
+        .select("*")
+        .eq("restaurant_id", RESTAURANT_ID)
+        .not("par_level", "is", null);
+
+      const belowPar = (items || []).filter((i) => i.current_stock <= i.par_level);
+
+      const grouped = {};
+      for (const item of belowPar) {
+        const { data: lastLine } = await supabase
+          .from("invoice_line_items")
+          .select("invoice_id, invoices(supplier_id, suppliers(name))")
+          .eq("inventory_item_id", item.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const supplierName = lastLine?.invoices?.suppliers?.name || "Unassigned";
+        if (!grouped[supplierName]) grouped[supplierName] = [];
+        grouped[supplierName].push(item);
+      }
+
+      const groupList = Object.entries(grouped).map(([supplier, items]) => ({ supplier, items }));
+      setGroups(groupList);
+      setExpanded(Object.fromEntries(groupList.map((g) => [g.supplier, true])));
+      setDrafts(Object.fromEntries(groupList.map((g) => [g.supplier, draftMessage(g.supplier, g.items)])));
+      setLoading(false);
+    }
+    load();
+  }, [RESTAURANT_ID]);
+
+  function toggleGroup(supplier) {
+    setExpanded((e) => ({ ...e, [supplier]: !e[supplier] }));
+  }
+  function copyDraft(supplier) {
+    navigator.clipboard?.writeText(drafts[supplier]);
+    setCopied(supplier);
+    setTimeout(() => setCopied(null), 1500);
+  }
+
+  if (loading) return <div style={{ padding: 24, color: textMuted }}>Loading…</div>;
+
+  const totalItems = groups.reduce((n, g) => n + g.items.length, 0);
+  const sentCount = Object.values(sent).filter(Boolean).length;
+
+  return (
+    <div>
+      <div style={{ padding: "24px 20px 8px" }}>
+        <div style={{ fontSize: 12, letterSpacing: 1.5, textTransform: "uppercase", color: textMuted, marginBottom: 4 }}>
+          Daily Digest
+        </div>
+        <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.3 }}>Below par</h1>
+        <div style={{ color: textMuted, fontSize: 13, marginTop: 6 }}>
+          {totalItems} items across {groups.length} suppliers
+          {sentCount > 0 && <span style={{ color: accent }}> &middot; {sentCount} sent</span>}
+        </div>
+      </div>
+
+      {totalItems === 0 && (
+        <div style={{ padding: "40px 20px", textAlign: "center", color: textMuted }}>
+          Nothing below par right now.
+        </div>
+      )}
+
+      <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+        {groups.map((group) => {
+          const isSent = sent[group.supplier];
+          return (
+            <div key={group.supplier} style={{ background: card, border: `1px solid ${isSent ? "#3D4A38" : "#35322D"}`, borderRadius: 10, overflow: "hidden" }}>
+              <button
+                onClick={() => toggleGroup(group.supplier)}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "14px 16px",
+                  background: "none",
+                  border: "none",
+                  color: textPrimary,
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 15 }}>{group.supplier}</div>
+                  <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>
+                    {group.items.length} item{group.items.length > 1 ? "s" : ""} below par
+                  </div>
+                </div>
+                {expanded[group.supplier] ? <ChevronUp size={16} color={textMuted} /> : <ChevronDown size={16} color={textMuted} />}
+              </button>
+
+              {expanded[group.supplier] && (
+                <div style={{ padding: "0 16px 16px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                    {group.items.map((item) => (
+                      <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", background: "#2C2A26", borderRadius: 8 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <AlertTriangle size={13} color={item.current_stock === 0 ? danger : accent} />
+                          <div>
+                            <div style={{ fontSize: 13 }}>{item.name}</div>
+                            <div style={{ fontSize: 11, color: textMuted, fontFamily: mono }}>
+                              {item.current_stock} / {item.par_level} {item.unit}
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ fontFamily: mono, fontSize: 13, color: accent, fontWeight: 600 }}>+{suggestQty(item)}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ fontSize: 11, color: textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Draft message</div>
+                  <textarea
+                    value={drafts[group.supplier]}
+                    onChange={(e) => setDrafts((d) => ({ ...d, [group.supplier]: e.target.value }))}
+                    rows={group.items.length + 2}
+                    style={{
+                      width: "100%",
+                      background: "#1C1B1A",
+                      border: "1px solid #3A3733",
+                      borderRadius: 8,
+                      padding: "10px 12px",
+                      color: textPrimary,
+                      fontSize: 13,
+                      fontFamily: mono,
+                      resize: "vertical",
+                      boxSizing: "border-box",
+                      lineHeight: 1.5,
+                    }}
+                  />
+
+                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                    <button
+                      onClick={() => copyDraft(group.supplier)}
+                      style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "none", border: "1px solid #45413A", borderRadius: 8, padding: "10px", color: textMuted, fontSize: 13, cursor: "pointer" }}
+                    >
+                      {copied === group.supplier ? <Check size={14} /> : <Copy size={14} />}
+                      {copied === group.supplier ? "Copied" : "Copy"}
+                    </button>
+                    <button
+                      onClick={() => setSent((s) => ({ ...s, [group.supplier]: true }))}
+                      disabled={isSent}
+                      style={{
+                        flex: 1,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                        background: isSent ? "#3D4A38" : accent,
+                        border: "none",
+                        borderRadius: 8,
+                        padding: "10px",
+                        color: isSent ? good : "#1C1B1A",
+                        fontWeight: 600,
+                        fontSize: 13,
+                        cursor: isSent ? "default" : "pointer",
+                      }}
+                    >
+                      {isSent ? <Check size={14} /> : <Send size={14} />}
+                      {isSent ? "Sent" : "Mark sent"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,9 @@
+export const bg = "#1C1B1A";
+export const card = "#252320";
+export const textPrimary = "#EDEAE4";
+export const textMuted = "#8A8681";
+export const accent = "#E8A33D";
+export const danger = "#C97B5E";
+export const good = "#8FAE7D";
+export const mono = "'IBM Plex Mono', monospace";
+export const sans = "'Inter', -apple-system, sans-serif";
