@@ -40,7 +40,7 @@ export default function App() {
   ];
 
   return (
-    <div style={{ background: bg, minHeight: "100vh", fontFamily: sans }}>
+    <div style={{ background: bg, minHeight: "100vh", fontFamily: sans, color: textPrimary }}>
       <div style={{ maxWidth: 420, margin: "0 auto", position: "relative" }}>
         <div
           style={{

@@ -95,7 +95,7 @@ export default function LoginScreen() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: sans, padding: 20 }}>
+    <div style={{ minHeight: "100vh", background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: sans, padding: 20, color: textPrimary }}>
       <div style={{ width: "100%", maxWidth: 380 }}>
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#3A2E1C", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
