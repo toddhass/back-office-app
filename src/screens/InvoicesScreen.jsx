@@ -30,6 +30,9 @@ function TicketDivider() {
 export default function InvoicesScreen() {
   const { restaurantId: RESTAURANT_ID } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [historyList, setHistoryList] = useState([]);
+  const [historyDetail, setHistoryDetail] = useState(null); // { invoice, lineItems }
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [invoice, setInvoice] = useState(null);
   const [lineItems, setLineItems] = useState([]);
   const [view, setView] = useState("queue");
@@ -67,6 +70,30 @@ export default function InvoicesScreen() {
 
     setLineItems(liErr ? [] : items);
     setLoading(false);
+  }
+
+  async function loadHistory() {
+    if (!RESTAURANT_ID) return;
+    setHistoryLoading(true);
+    const { data } = await supabase
+      .from("invoices")
+      .select("*, suppliers(name)")
+      .eq("restaurant_id", RESTAURANT_ID)
+      .eq("status", "confirmed")
+      .order("invoice_date", { ascending: false });
+    setHistoryList(data || []);
+    setHistoryLoading(false);
+  }
+
+  async function loadHistoryDetail(inv) {
+    setHistoryLoading(true);
+    const { data: items } = await supabase
+      .from("invoice_line_items")
+      .select("*, inventory_items(name)")
+      .eq("invoice_id", inv.id)
+      .order("created_at", { ascending: true });
+    setHistoryDetail({ invoice: inv, lineItems: items || [] });
+    setHistoryLoading(false);
   }
 
   useEffect(() => {
@@ -176,10 +203,106 @@ export default function InvoicesScreen() {
     return <div style={{ padding: 24, color: textMuted }}>Loading…</div>;
   }
 
+  if (view === "history") {
+    return (
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "20px 16px 8px" }}>
+          <button onClick={() => setView("queue")} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", padding: 4 }}>
+            <ArrowLeft size={20} />
+          </button>
+          <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Past invoices</h1>
+        </div>
+
+        {historyLoading && <div style={{ padding: "20px 16px", color: textMuted }}>Loading…</div>}
+
+        {!historyLoading && historyList.length === 0 && (
+          <div style={{ padding: "40px 20px", textAlign: "center", color: textMuted }}>
+            No confirmed invoices yet.
+          </div>
+        )}
+
+        <div style={{ padding: "8px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+          {historyList.map((inv) => (
+            <button
+              key={inv.id}
+              onClick={() => {
+                setView("historyDetail");
+                loadHistoryDetail(inv);
+              }}
+              style={{
+                width: "100%",
+                textAlign: "left",
+                background: card,
+                border: "1px solid #35322D",
+                borderRadius: 10,
+                padding: "14px 16px",
+                color: textPrimary,
+                cursor: "pointer",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{inv.suppliers?.name || "Unknown supplier"}</div>
+                <div style={{ color: textMuted, fontSize: 12, marginTop: 2 }}>{inv.invoice_date}</div>
+              </div>
+              <div style={{ fontFamily: mono, fontSize: 14, color: accent }}>${Number(inv.invoice_total || 0).toFixed(2)}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (view === "historyDetail" && historyDetail) {
+    const { invoice: histInv, lineItems: histItems } = historyDetail;
+    return (
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "20px 16px 8px" }}>
+          <button onClick={() => setView("history")} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", padding: 4 }}>
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 15 }}>{histInv.suppliers?.name || "Unknown supplier"}</div>
+            <div style={{ fontSize: 12, color: textMuted }}>{histInv.invoice_date}</div>
+          </div>
+        </div>
+
+        {historyLoading && <div style={{ padding: "20px 16px", color: textMuted }}>Loading…</div>}
+
+        <div style={{ padding: "8px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+          {histItems.map((item) => (
+            <div key={item.id} style={{ background: card, border: "1px solid #35322D", borderRadius: 8, padding: "10px 12px" }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{item.inventory_items?.name || item.raw_description}</div>
+              <div style={{ fontSize: 11, color: textMuted, fontFamily: mono, marginTop: 2 }}>
+                {item.quantity} {item.unit} &middot; ${Number(item.line_total || 0).toFixed(2)}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ padding: "16px", display: "flex", justifyContent: "space-between", borderTop: "1px solid #2A2825", marginTop: 8 }}>
+          <span style={{ color: textMuted, fontSize: 13 }}>Total</span>
+          <span style={{ fontFamily: mono, color: accent, fontSize: 15 }}>${Number(histInv.invoice_total || 0).toFixed(2)}</span>
+        </div>
+      </div>
+    );
+  }
+
   if (!invoice) {
     return (
       <div style={{ padding: "60px 20px", textAlign: "center", color: textMuted }}>
-        No invoices waiting for review. Upload one from the Capture tab.
+        <div>No invoices waiting for review. Upload one from the Capture tab.</div>
+        <button
+          onClick={() => {
+            setView("history");
+            loadHistory();
+          }}
+          style={{ marginTop: 16, background: "none", border: "1px solid #35322D", borderRadius: 8, padding: "10px 16px", color: textMuted, cursor: "pointer", fontSize: 13 }}
+        >
+          View past invoices
+        </button>
       </div>
     );
   }
@@ -187,11 +310,22 @@ export default function InvoicesScreen() {
   if (view === "queue") {
     return (
       <div>
-        <div style={{ padding: "24px 20px 8px" }}>
-          <div style={{ fontSize: 12, letterSpacing: 1.5, textTransform: "uppercase", color: textMuted, marginBottom: 4 }}>
-            Invoice Queue
+        <div style={{ padding: "24px 20px 8px", display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+          <div>
+            <div style={{ fontSize: 12, letterSpacing: 1.5, textTransform: "uppercase", color: textMuted, marginBottom: 4 }}>
+              Invoice Queue
+            </div>
+            <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.3 }}>Needs review</h1>
           </div>
-          <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.3 }}>Needs review</h1>
+          <button
+            onClick={() => {
+              setView("history");
+              loadHistory();
+            }}
+            style={{ background: "none", border: "none", color: textMuted, fontSize: 12, cursor: "pointer", textDecoration: "underline" }}
+          >
+            History
+          </button>
         </div>
         <div style={{ padding: "8px 16px" }}>
           <button
