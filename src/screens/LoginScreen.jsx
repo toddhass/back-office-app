@@ -38,9 +38,9 @@ export default function LoginScreen() {
         return;
       }
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setError(error.message);
+      if (error) setError(`${error.name || "AuthError"} (${error.status || "?"}): ${error.message || JSON.stringify(error)}`);
     } catch (err) {
-      setError(`Unexpected error: ${err?.message || String(err)}`);
+      setError(`Unexpected error: ${err?.name || "Error"}: ${err?.message || JSON.stringify(err) || String(err)}`);
     } finally {
       setLoading(false);
     }
@@ -88,7 +88,7 @@ export default function LoginScreen() {
 
     await refreshRestaurant();
     } catch (err) {
-      setError(`Unexpected error: ${err?.message || String(err)}`);
+      setError(`Unexpected error: ${err?.name || "Error"}: ${err?.message || JSON.stringify(err) || String(err)}`);
     } finally {
       setLoading(false);
     }
@@ -173,7 +173,11 @@ export default function LoginScreen() {
             </>
           )}
 
-          {error && <div style={{ color: danger, fontSize: 12, marginBottom: 10 }}>{error}</div>}
+          {error && (
+            <div style={{ color: danger, fontSize: 13, marginBottom: 10, fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.4, border: "1px solid #4A2E28", background: "#2A1E1B", borderRadius: 6, padding: 8 }}>
+              {error}
+            </div>
+          )}
 
           <button
             type="button"
