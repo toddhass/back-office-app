@@ -67,6 +67,7 @@ export default function CaptureScreen({ onDone }) {
       needsReview: (lineItems || []).filter((i) => i.needs_review).length,
       total: invoiceRow?.invoice_total || 0,
       matchedExistingSupplier: data?.matched_existing_supplier || null,
+      supplierMatchMethod: data?.supplier_match_method || null,
       rawSupplierName: invoiceRow?.raw_extraction?.supplier_name || null,
     });
     setStatus("done");
@@ -163,7 +164,7 @@ export default function CaptureScreen({ onDone }) {
             <div style={{ fontSize: 13, color: textMuted }}>{result.supplier}</div>
             {result.matchedExistingSupplier && (
               <div style={{ fontSize: 11, color: accent, maxWidth: 260 }}>
-                Matched to existing supplier — invoice read as "{result.rawSupplierName}"
+                Matched to existing supplier via {result.supplierMatchMethod === "ai" ? "AI" : "similarity match"} — invoice read as "{result.rawSupplierName}"
               </div>
             )}
             <div style={{ display: "flex", gap: 20, marginTop: 4 }}>
