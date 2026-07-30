@@ -33,7 +33,18 @@ export default function CaptureScreen({ onDone }) {
     });
 
     if (fnError) {
-      setErrorMsg(fnError.message);
+      let detail = fnError.message;
+      try {
+        // supabase-js puts the raw Response on fnError.context for FunctionsHttpError;
+        // the real error message is in the JSON body our function returns.
+        if (fnError.context && typeof fnError.context.json === "function") {
+          const body = await fnError.context.json();
+          detail = body?.error || detail;
+        }
+      } catch (_) {
+        // fall back to the generic message if we can't parse a body
+      }
+      setErrorMsg(detail);
       setStatus("error");
       return;
     }
@@ -178,7 +189,7 @@ export default function CaptureScreen({ onDone }) {
           <div style={{ background: card, border: `1px solid ${danger}`, borderRadius: 14, padding: "28px 22px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10, textAlign: "center" }}>
             <XCircle size={28} color={danger} />
             <div style={{ fontWeight: 600, fontSize: 15 }}>Couldn't read that invoice</div>
-            <div style={{ fontSize: 13, color: textMuted }}>{errorMsg || "Try retaking the photo with better lighting, or upload the PDF directly."}</div>
+            <div style={{ fontSize: 12, color: textMuted, fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-word", textAlign: "left", background: "#2A1E1B", border: "1px solid #4A2E28", borderRadius: 6, padding: 8, maxHeight: 200, overflowY: "auto" }}>{errorMsg || "Try retaking the photo with better lighting, or upload the PDF directly."}</div>
             <button onClick={reset} style={{ marginTop: 8, background: accent, border: "none", borderRadius: 10, padding: "12px 20px", color: "#1C1B1A", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
               Try again
             </button>
