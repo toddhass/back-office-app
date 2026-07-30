@@ -194,7 +194,16 @@ export default function InvoicesScreen() {
         reference_id: invoice.id,
       });
     }
-    await supabase.from("invoices").update({ status: "confirmed" }).eq("id", invoice.id);
+    const { data: userData } = await supabase.auth.getUser();
+    await supabase
+      .from("invoices")
+      .update({
+        status: "confirmed",
+        confirmed_by: userData?.user?.id || null,
+        confirmed_by_email: userData?.user?.email || null,
+        confirmed_at: new Date().toISOString(),
+      })
+      .eq("id", invoice.id);
     setView("queue");
     loadPendingInvoice();
   }
@@ -245,7 +254,10 @@ export default function InvoicesScreen() {
             >
               <div>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{inv.suppliers?.name || "Unknown supplier"}</div>
-                <div style={{ color: textMuted, fontSize: 12, marginTop: 2 }}>{inv.invoice_date}</div>
+                <div style={{ color: textMuted, fontSize: 12, marginTop: 2 }}>
+                  {inv.invoice_date}
+                  {inv.confirmed_by_email && ` · ${inv.confirmed_by_email}`}
+                </div>
               </div>
               <div style={{ fontFamily: mono, fontSize: 14, color: accent }}>${Number(inv.invoice_total || 0).toFixed(2)}</div>
             </button>
@@ -286,6 +298,12 @@ export default function InvoicesScreen() {
           <span style={{ color: textMuted, fontSize: 13 }}>Total</span>
           <span style={{ fontFamily: mono, color: accent, fontSize: 15 }}>${Number(histInv.invoice_total || 0).toFixed(2)}</span>
         </div>
+        {histInv.confirmed_by_email && (
+          <div style={{ padding: "0 16px 16px", fontSize: 12, color: textMuted }}>
+            Received by {histInv.confirmed_by_email}
+            {histInv.confirmed_at && ` on ${new Date(histInv.confirmed_at).toLocaleDateString()}`}
+          </div>
+        )}
       </div>
     );
   }
