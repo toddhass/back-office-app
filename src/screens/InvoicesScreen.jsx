@@ -44,40 +44,72 @@ export default function InvoicesScreen() {
   const [confirmingVendor, setConfirmingVendor] = useState(false);
   const [invoice, setInvoice] = useState(null);
   const [lineItems, setLineItems] = useState([]);
+  const [pendingList, setPendingList] = useState([]);
   const [view, setView] = useState("queue");
   const [cardIndex, setCardIndex] = useState(0);
   const [newItemName, setNewItemName] = useState("");
   const [showNewForm, setShowNewForm] = useState(false);
 
-  async function loadPendingInvoice() {
+  async function loadPendingList() {
     if (!RESTAURANT_ID) return;
     setLoading(true);
-    // Grab the oldest pending-review invoice for this restaurant
     const { data: invoices, error: invErr } = await supabase
       .from("invoices")
       .select("*, suppliers(name)")
       .eq("restaurant_id", RESTAURANT_ID)
       .eq("status", "pending_review")
-      .order("created_at", { ascending: true })
-      .limit(1);
+      .order("created_at", { ascending: true });
 
     if (invErr || !invoices?.length) {
-      setInvoice(null);
-      setLineItems([]);
+      setPendingList([]);
       setLoading(false);
       return;
     }
 
-    const inv = invoices[0];
-    setInvoice(inv);
+    const ids = invoices.map((i) => i.id);
+    const { data: allItems } = await supabase
+      .from("invoice_line_items")
+      .select("invoice_id, needs_review")
+      .in("invoice_id", ids);
 
-    const { data: items, error: liErr } = await supabase
+    const counts = {};
+    (allItems || []).forEach((li) => {
+      if (li.needs_review) counts[li.invoice_id] = (counts[li.invoice_id] || 0) + 1;
+    });
+
+    setPendingList(
+      invoices.map((inv) => ({
+        ...inv,
+        needsReviewCount: counts[inv.id] || 0,
+        needsVendorConfirm: !inv.supplier_id,
+      }))
+    );
+    setLoading(false);
+  }
+
+  async function loadInvoiceDetail(invId) {
+    setLoading(true);
+    const { data: inv } = await supabase
+      .from("invoices")
+      .select("*, suppliers(name)")
+      .eq("id", invId)
+      .single();
+
+    const { data: items } = await supabase
       .from("invoice_line_items")
       .select("*")
-      .eq("invoice_id", inv.id)
+      .eq("invoice_id", invId)
       .order("created_at", { ascending: true });
 
-    setLineItems(liErr ? [] : items);
+    setInvoice(inv || null);
+    setLineItems(items || []);
+    setCardIndex(0);
+    setShowNewForm(false);
+    setNewItemName("");
+    setVendorSelection(null);
+    setShowNewVendorConfirm(false);
+    setNewVendorConfirmName("");
+    setView("detail");
     setLoading(false);
   }
 
@@ -156,7 +188,7 @@ export default function InvoicesScreen() {
       .eq("id", invoice.id);
     if (!error) {
       setInvoice((prev) => ({ ...prev, supplier_id: candidateId }));
-      loadPendingInvoice();
+      loadInvoiceDetail(invoice.id);
     }
     setConfirmingVendor(false);
   }
@@ -175,14 +207,14 @@ export default function InvoicesScreen() {
       await supabase.from("invoices").update({ supplier_id: created.id }).eq("id", invoice.id);
       setInvoice((prev) => ({ ...prev, supplier_id: created.id }));
       loadSuppliers();
-      loadPendingInvoice();
+      loadInvoiceDetail(invoice.id);
     }
     setConfirmingVendor(false);
     setShowNewVendorConfirm(false);
   }
 
   useEffect(() => {
-    loadPendingInvoice();
+    loadPendingList();
   }, [RESTAURANT_ID]);
 
   const reviewItems = lineItems.filter((i) => i.needs_review);
@@ -290,7 +322,7 @@ export default function InvoicesScreen() {
       })
       .eq("id", invoice.id);
     setView("queue");
-    loadPendingInvoice();
+    loadPendingList();
   }
 
   if (loading) {
@@ -301,7 +333,7 @@ export default function InvoicesScreen() {
     return (
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "20px 16px 8px" }}>
-          <button onClick={() => setView("queue")} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", padding: 4 }}>
+          <button onClick={() => { setView("queue"); loadPendingList(); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", padding: 4 }}>
             <ArrowLeft size={20} />
           </button>
           <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Past invoices</h1>
@@ -457,24 +489,6 @@ export default function InvoicesScreen() {
     );
   }
 
-  if (!invoice) {
-    return (
-      <div style={{ padding: "60px 20px", textAlign: "center", color: textMuted }}>
-        <div>No invoices waiting for review. Upload one from the Capture tab.</div>
-        <button
-          onClick={() => {
-            setView("history");
-            loadHistory();
-            loadSuppliers();
-          }}
-          style={{ marginTop: 16, background: "none", border: "1px solid #35322D", borderRadius: 8, padding: "10px 16px", color: textMuted, cursor: "pointer", fontSize: 13 }}
-        >
-          View past invoices
-        </button>
-      </div>
-    );
-  }
-
   if (view === "queue") {
     return (
       <div>
@@ -496,50 +510,95 @@ export default function InvoicesScreen() {
             History
           </button>
         </div>
-        <div style={{ padding: "8px 16px" }}>
-          <button
-            onClick={() => setView("detail")}
-            style={{
-              width: "100%",
-              textAlign: "left",
-              background: card,
-              border: "1px solid #35322D",
-              borderRadius: 10,
-              padding: "16px 18px",
-              color: textPrimary,
-              cursor: "pointer",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 15 }}>{invoice.suppliers?.name || "Unknown supplier"}</div>
-                <div style={{ color: textMuted, fontSize: 13, marginTop: 2 }}>{invoice.invoice_date}</div>
-              </div>
-              <div style={{ fontFamily: mono, fontSize: 15, color: accent }}>
-                ${Number(invoice.invoice_total || 0).toFixed(2)}
-              </div>
-            </div>
-            <TicketDivider />
-            <div
+
+        {pendingList.length === 0 && (
+          <div style={{ padding: "60px 20px", textAlign: "center", color: textMuted }}>
+            <div>No invoices waiting for review. Upload one from the Capture tab.</div>
+            <button
+              onClick={() => {
+                setView("history");
+                loadHistory();
+                loadSuppliers();
+              }}
+              style={{ marginTop: 16, background: "none", border: "1px solid #35322D", borderRadius: 8, padding: "10px 16px", color: textMuted, cursor: "pointer", fontSize: 13 }}
+            >
+              View past invoices
+            </button>
+          </div>
+        )}
+
+        <div style={{ padding: "8px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+          {pendingList.map((inv) => (
+            <button
+              key={inv.id}
+              onClick={() => loadInvoiceDetail(inv.id)}
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                background: "#3A2E1C",
-                color: accent,
-                fontSize: 12,
-                fontWeight: 600,
-                padding: "4px 10px",
-                borderRadius: 20,
+                width: "100%",
+                textAlign: "left",
+                background: card,
+                border: "1px solid #35322D",
+                borderRadius: 10,
+                padding: "16px 18px",
+                color: textPrimary,
+                cursor: "pointer",
               }}
             >
-              <AlertTriangle size={12} />
-              {reviewItems.length} items need review
-            </div>
-          </button>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 15 }}>{inv.suppliers?.name || "Unknown supplier"}</div>
+                  <div style={{ color: textMuted, fontSize: 13, marginTop: 2 }}>{inv.invoice_date}</div>
+                </div>
+                <div style={{ fontFamily: mono, fontSize: 15, color: accent }}>
+                  ${Number(inv.invoice_total || 0).toFixed(2)}
+                </div>
+              </div>
+              <TicketDivider />
+              {inv.needsVendorConfirm ? (
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    background: "#3A2E1C",
+                    color: accent,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    padding: "4px 10px",
+                    borderRadius: 20,
+                  }}
+                >
+                  <AlertTriangle size={12} />
+                  Confirm vendor
+                </div>
+              ) : inv.needsReviewCount > 0 ? (
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    background: "#3A2E1C",
+                    color: accent,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    padding: "4px 10px",
+                    borderRadius: 20,
+                  }}
+                >
+                  <AlertTriangle size={12} />
+                  {inv.needsReviewCount} items need review
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: good }}>Ready to post</div>
+              )}
+            </button>
+          ))}
         </div>
       </div>
     );
+  }
+
+  if (!invoice) {
+    return null;
   }
 
   if (!invoice.supplier_id) {
@@ -548,7 +607,7 @@ export default function InvoicesScreen() {
     return (
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "20px 16px 8px" }}>
-          <button onClick={() => setView("queue")} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", padding: 4 }}>
+          <button onClick={() => { setView("queue"); loadPendingList(); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", padding: 4 }}>
             <ArrowLeft size={20} />
           </button>
           <div>
@@ -663,7 +722,7 @@ export default function InvoicesScreen() {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "20px 16px 8px" }}>
-        <button onClick={() => setView("queue")} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", padding: 4 }}>
+        <button onClick={() => { setView("queue"); loadPendingList(); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", padding: 4 }}>
           <ArrowLeft size={20} />
         </button>
         <div>
