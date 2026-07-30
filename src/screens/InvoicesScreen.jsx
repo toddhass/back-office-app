@@ -33,6 +33,11 @@ export default function InvoicesScreen() {
   const [historyList, setHistoryList] = useState([]);
   const [historyDetail, setHistoryDetail] = useState(null); // { invoice, lineItems }
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [suppliersList, setSuppliersList] = useState([]);
+  const [showAddVendor, setShowAddVendor] = useState(false);
+  const [newVendorName, setNewVendorName] = useState("");
+  const [addingVendor, setAddingVendor] = useState(false);
+  const [addVendorError, setAddVendorError] = useState("");
   const [invoice, setInvoice] = useState(null);
   const [lineItems, setLineItems] = useState([]);
   const [view, setView] = useState("queue");
@@ -95,6 +100,48 @@ export default function InvoicesScreen() {
       .order("created_at", { ascending: true });
     setHistoryDetail({ invoice: inv, lineItems: items || [] });
     setHistoryLoading(false);
+  }
+
+  async function loadSuppliers() {
+    if (!RESTAURANT_ID) return;
+    const { data } = await supabase
+      .from("suppliers")
+      .select("id, name")
+      .eq("restaurant_id", RESTAURANT_ID)
+      .order("name", { ascending: true });
+    setSuppliersList(data || []);
+  }
+
+  async function addVendor() {
+    if (!newVendorName.trim()) return;
+    setAddingVendor(true);
+    setAddVendorError("");
+
+    // Guard against creating a duplicate row for a vendor that's just a
+    // name variant of one that already exists (same reasoning as the
+    // invoice-time supplier resolution, kept simple here as an exact check
+    // since this is a deliberate manual add, not an OCR read).
+    const exists = suppliersList.some(
+      (s) => s.name.trim().toLowerCase() === newVendorName.trim().toLowerCase()
+    );
+    if (exists) {
+      setAddVendorError("A vendor with this name already exists.");
+      setAddingVendor(false);
+      return;
+    }
+
+    const { error } = await supabase
+      .from("suppliers")
+      .insert({ restaurant_id: RESTAURANT_ID, name: newVendorName.trim() });
+
+    if (error) {
+      setAddVendorError(error.message);
+    } else {
+      setNewVendorName("");
+      setShowAddVendor(false);
+      loadSuppliers();
+    }
+    setAddingVendor(false);
   }
 
   useEffect(() => {
@@ -223,6 +270,67 @@ export default function InvoicesScreen() {
           <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Past invoices</h1>
         </div>
 
+        <div style={{ padding: "8px 16px 16px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <div style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", color: textMuted }}>Vendors</div>
+            <button
+              onClick={() => {
+                setShowAddVendor((s) => !s);
+                setAddVendorError("");
+              }}
+              style={{ background: "none", border: "none", color: accent, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
+            >
+              <Plus size={13} /> Add vendor
+            </button>
+          </div>
+
+          {showAddVendor && (
+            <div style={{ background: card, border: "1px solid #35322D", borderRadius: 8, padding: 12, marginBottom: 10 }}>
+              <input
+                placeholder="Vendor name"
+                value={newVendorName}
+                onChange={(e) => setNewVendorName(e.target.value)}
+                style={{ width: "100%", background: "#1C1B1A", border: "1px solid #45413A", borderRadius: 6, padding: "8px 10px", color: textPrimary, fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
+              />
+              {addVendorError && <div style={{ color: danger, fontSize: 12, marginBottom: 8 }}>{addVendorError}</div>}
+              <button
+                onClick={addVendor}
+                disabled={!newVendorName.trim() || addingVendor}
+                style={{
+                  width: "100%",
+                  background: newVendorName.trim() ? accent : "#45413A",
+                  border: "none",
+                  borderRadius: 6,
+                  padding: "9px 12px",
+                  color: "#1C1B1A",
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: newVendorName.trim() ? "pointer" : "not-allowed",
+                }}
+              >
+                {addingVendor ? "Adding…" : "Save vendor"}
+              </button>
+            </div>
+          )}
+
+          {suppliersList.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {suppliersList.map((s) => (
+                <span
+                  key={s.id}
+                  style={{ fontSize: 12, color: textMuted, background: "#2C2A26", border: "1px solid #35322D", borderRadius: 20, padding: "5px 12px" }}
+                >
+                  {s.name}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: "0 16px 8px", fontSize: 12, letterSpacing: 1, textTransform: "uppercase", color: textMuted }}>
+          Invoice history
+        </div>
+
         {historyLoading && <div style={{ padding: "20px 16px", color: textMuted }}>Loading…</div>}
 
         {!historyLoading && historyList.length === 0 && (
@@ -320,6 +428,7 @@ export default function InvoicesScreen() {
           onClick={() => {
             setView("history");
             loadHistory();
+            loadSuppliers();
           }}
           style={{ marginTop: 16, background: "none", border: "1px solid #35322D", borderRadius: 8, padding: "10px 16px", color: textMuted, cursor: "pointer", fontSize: 13 }}
         >
@@ -343,6 +452,7 @@ export default function InvoicesScreen() {
             onClick={() => {
               setView("history");
               loadHistory();
+              loadSuppliers();
             }}
             style={{ background: "none", border: "none", color: textMuted, fontSize: 12, cursor: "pointer", textDecoration: "underline" }}
           >
