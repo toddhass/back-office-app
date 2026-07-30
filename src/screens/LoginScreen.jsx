@@ -31,15 +31,26 @@ export default function LoginScreen() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setError(error.message);
-    setLoading(false);
+    try {
+      if (!email || !password) {
+        setError("Enter both email and password.");
+        setLoading(false);
+        return;
+      }
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) setError(error.message);
+    } catch (err) {
+      setError(`Unexpected error: ${err?.message || String(err)}`);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleSignUp(e) {
     e.preventDefault();
     setError("");
     setLoading(true);
+    try {
 
     const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
     if (signUpError) {
@@ -76,7 +87,11 @@ export default function LoginScreen() {
     }
 
     await refreshRestaurant();
-    setLoading(false);
+    } catch (err) {
+      setError(`Unexpected error: ${err?.message || String(err)}`);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -161,8 +176,9 @@ export default function LoginScreen() {
           {error && <div style={{ color: danger, fontSize: 12, marginBottom: 10 }}>{error}</div>}
 
           <button
-            type="submit"
+            type="button"
             disabled={loading}
+            onClick={(e) => (mode === "signin" ? handleSignIn(e) : handleSignUp(e))}
             style={{ width: "100%", background: accent, border: "none", borderRadius: 8, padding: "12px", color: "#1C1B1A", fontWeight: 700, fontSize: 14, cursor: "pointer", marginTop: 4 }}
           >
             {loading ? "Please wait…" : mode === "signin" ? "Sign in" : "Create account"}
