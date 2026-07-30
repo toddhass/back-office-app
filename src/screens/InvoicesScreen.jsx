@@ -38,6 +38,10 @@ export default function InvoicesScreen() {
   const [newVendorName, setNewVendorName] = useState("");
   const [addingVendor, setAddingVendor] = useState(false);
   const [addVendorError, setAddVendorError] = useState("");
+  const [vendorSelection, setVendorSelection] = useState(null); // candidate id, or 'new'
+  const [showNewVendorConfirm, setShowNewVendorConfirm] = useState(false);
+  const [newVendorConfirmName, setNewVendorConfirmName] = useState("");
+  const [confirmingVendor, setConfirmingVendor] = useState(false);
   const [invoice, setInvoice] = useState(null);
   const [lineItems, setLineItems] = useState([]);
   const [view, setView] = useState("queue");
@@ -142,6 +146,39 @@ export default function InvoicesScreen() {
       loadSuppliers();
     }
     setAddingVendor(false);
+  }
+
+  async function confirmVendorMatch(candidateId) {
+    setConfirmingVendor(true);
+    const { error } = await supabase
+      .from("invoices")
+      .update({ supplier_id: candidateId })
+      .eq("id", invoice.id);
+    if (!error) {
+      setInvoice((prev) => ({ ...prev, supplier_id: candidateId }));
+      loadPendingInvoice();
+    }
+    setConfirmingVendor(false);
+  }
+
+  async function confirmNewVendorFromInvoice() {
+    if (!newVendorConfirmName.trim()) return;
+    setConfirmingVendor(true);
+
+    const { data: created, error: createError } = await supabase
+      .from("suppliers")
+      .insert({ restaurant_id: RESTAURANT_ID, name: newVendorConfirmName.trim() })
+      .select("id")
+      .single();
+
+    if (!createError && created) {
+      await supabase.from("invoices").update({ supplier_id: created.id }).eq("id", invoice.id);
+      setInvoice((prev) => ({ ...prev, supplier_id: created.id }));
+      loadSuppliers();
+      loadPendingInvoice();
+    }
+    setConfirmingVendor(false);
+    setShowNewVendorConfirm(false);
   }
 
   useEffect(() => {
@@ -500,6 +537,124 @@ export default function InvoicesScreen() {
               {reviewItems.length} items need review
             </div>
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!invoice.supplier_id) {
+    const rawName = invoice.raw_extraction?.supplier_name || "Unknown";
+    const candidates = invoice.raw_extraction?.supplier_candidates || [];
+    return (
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "20px 16px 8px" }}>
+          <button onClick={() => setView("queue")} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", padding: 4 }}>
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 15 }}>Confirm vendor</div>
+            <div style={{ fontSize: 12, color: textMuted }}>{invoice.invoice_date}</div>
+          </div>
+        </div>
+
+        <div style={{ padding: "8px 16px" }}>
+          <div style={{ background: card, border: "1px solid #35322D", borderRadius: 10, padding: 18 }}>
+            <div style={{ fontFamily: mono, fontSize: 15, marginBottom: 4 }}>"{rawName}"</div>
+            <div style={{ color: textMuted, fontSize: 13, marginBottom: 14 }}>
+              We couldn't confidently match this to an existing vendor.
+            </div>
+            <TicketDivider />
+
+            {candidates.length > 0 ? (
+              <>
+                <div style={{ fontSize: 12, color: textMuted, textTransform: "uppercase", letterSpacing: 1, margin: "10px 0 8px" }}>
+                  Is it one of these?
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {candidates.map((c) => (
+                    <label
+                      key={c.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: "10px 12px",
+                        borderRadius: 8,
+                        background: vendorSelection === c.id ? "#332B1C" : "#2C2A26",
+                        border: vendorSelection === c.id ? `1px solid ${accent}` : "1px solid #35322D",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        checked={vendorSelection === c.id}
+                        onChange={() => setVendorSelection(c.id)}
+                        style={{ accentColor: accent }}
+                      />
+                      <div style={{ fontSize: 14 }}>{c.name}</div>
+                    </label>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: 13, color: textMuted, marginBottom: 12 }}>
+                No existing vendors look close — this is likely a new one.
+              </div>
+            )}
+
+            {!showNewVendorConfirm ? (
+              <button
+                onClick={() => {
+                  setShowNewVendorConfirm(true);
+                  setNewVendorConfirmName(rawName);
+                }}
+                style={{ marginTop: 10, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "none", border: "1px dashed #45413A", borderRadius: 8, padding: "10px 12px", color: textMuted, fontSize: 13, cursor: "pointer" }}
+              >
+                <Plus size={14} /> None of these — new vendor
+              </button>
+            ) : (
+              <div style={{ marginTop: 10, background: "#2C2A26", borderRadius: 8, padding: 12 }}>
+                <input
+                  value={newVendorConfirmName}
+                  onChange={(e) => setNewVendorConfirmName(e.target.value)}
+                  style={{ width: "100%", background: "#1C1B1A", border: "1px solid #45413A", borderRadius: 6, padding: "8px 10px", color: textPrimary, fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
+                />
+                <button
+                  onClick={confirmNewVendorFromInvoice}
+                  disabled={!newVendorConfirmName.trim() || confirmingVendor}
+                  style={{ width: "100%", background: newVendorConfirmName.trim() ? accent : "#45413A", border: "none", borderRadius: 6, padding: "9px 12px", color: "#1C1B1A", fontWeight: 600, fontSize: 13, cursor: newVendorConfirmName.trim() ? "pointer" : "not-allowed" }}
+                >
+                  {confirmingVendor ? "Saving…" : "Create vendor"}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {candidates.length > 0 && (
+            <button
+              onClick={() => confirmVendorMatch(vendorSelection)}
+              disabled={!vendorSelection || confirmingVendor}
+              style={{
+                width: "100%",
+                marginTop: 14,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                background: vendorSelection ? accent : "#35322D",
+                color: vendorSelection ? "#1C1B1A" : textMuted,
+                border: "none",
+                borderRadius: 10,
+                padding: "13px",
+                fontWeight: 600,
+                fontSize: 14,
+                cursor: vendorSelection ? "pointer" : "not-allowed",
+              }}
+            >
+              <Check size={16} />
+              Confirm vendor
+            </button>
+          )}
         </div>
       </div>
     );
