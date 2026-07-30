@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Camera, ImageIcon, Loader2, CheckCircle2, XCircle, RotateCcw } from "lucide-react";
+import { Camera, ImageIcon, Loader2, CheckCircle2, XCircle, RotateCcw, Copy } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, mono } from "../lib/tokens";
@@ -186,14 +186,25 @@ export default function CaptureScreen({ onDone }) {
         )}
 
         {status === "error" && (
-          <div style={{ background: card, border: `1px solid ${danger}`, borderRadius: 14, padding: "28px 22px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10, textAlign: "center" }}>
-            <XCircle size={28} color={danger} />
-            <div style={{ fontWeight: 600, fontSize: 15 }}>Couldn't read that invoice</div>
-            <div style={{ fontSize: 12, color: textMuted, fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-word", textAlign: "left", background: "#2A1E1B", border: "1px solid #4A2E28", borderRadius: 6, padding: 8, maxHeight: 200, overflowY: "auto" }}>{errorMsg || "Try retaking the photo with better lighting, or upload the PDF directly."}</div>
-            <button onClick={reset} style={{ marginTop: 8, background: accent, border: "none", borderRadius: 10, padding: "12px 20px", color: "#1C1B1A", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
-              Try again
-            </button>
-          </div>
+          errorMsg?.startsWith("Duplicate:") ? (
+            <div style={{ background: card, border: `1px solid ${accent}`, borderRadius: 14, padding: "28px 22px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10, textAlign: "center" }}>
+              <Copy size={26} color={accent} />
+              <div style={{ fontWeight: 600, fontSize: 15 }}>Already uploaded</div>
+              <div style={{ fontSize: 13, color: textMuted, maxWidth: 280 }}>{errorMsg.replace(/^Duplicate:\s*/, "")}</div>
+              <button onClick={reset} style={{ marginTop: 8, background: accent, border: "none", borderRadius: 10, padding: "12px 20px", color: "#1C1B1A", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                Upload a different invoice
+              </button>
+            </div>
+          ) : (
+            <div style={{ background: card, border: `1px solid ${danger}`, borderRadius: 14, padding: "28px 22px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10, textAlign: "center" }}>
+              <XCircle size={28} color={danger} />
+              <div style={{ fontWeight: 600, fontSize: 15 }}>Couldn't read that invoice</div>
+              <div style={{ fontSize: 12, color: textMuted, fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-word", textAlign: "left", background: "#2A1E1B", border: "1px solid #4A2E28", borderRadius: 6, padding: 8, maxHeight: 200, overflowY: "auto" }}>{errorMsg || "Try retaking the photo with better lighting, or upload the PDF directly."}</div>
+              <button onClick={reset} style={{ marginTop: 8, background: accent, border: "none", borderRadius: 10, padding: "12px 20px", color: "#1C1B1A", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                Try again
+              </button>
+            </div>
+          )
         )}
       </div>
     </div>
