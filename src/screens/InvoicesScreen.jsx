@@ -257,6 +257,8 @@ export default function InvoicesScreen() {
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{inv.suppliers?.name || "Unknown supplier"}</div>
                 <div style={{ color: textMuted, fontSize: 12, marginTop: 2 }}>
                   {inv.invoice_date}
+                  {" · "}
+                  {new Date(inv.confirmed_at || inv.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                   {inv.confirmed_by_email && ` · ${inv.confirmed_by_email}`}
                 </div>
               </div>
@@ -302,7 +304,8 @@ export default function InvoicesScreen() {
         {histInv.confirmed_by_email && (
           <div style={{ padding: "0 16px 16px", fontSize: 12, color: textMuted }}>
             Received by {histInv.confirmed_by_email}
-            {histInv.confirmed_at && ` on ${new Date(histInv.confirmed_at).toLocaleDateString()}`}
+            {histInv.confirmed_at &&
+              ` on ${new Date(histInv.confirmed_at).toLocaleDateString()} at ${new Date(histInv.confirmed_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`}
           </div>
         )}
       </div>
