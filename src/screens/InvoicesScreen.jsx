@@ -80,7 +80,8 @@ export default function InvoicesScreen() {
       .select("*, suppliers(name)")
       .eq("restaurant_id", RESTAURANT_ID)
       .eq("status", "confirmed")
-      .order("invoice_date", { ascending: false });
+      .order("invoice_date", { ascending: false })
+      .order("created_at", { ascending: false });
     setHistoryList(data || []);
     setHistoryLoading(false);
   }
