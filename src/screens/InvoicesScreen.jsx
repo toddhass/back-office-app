@@ -422,14 +422,27 @@ export default function InvoicesScreen() {
 
           {suppliersList.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {suppliersList.map((s) => (
-                <span
-                  key={s.id}
-                  style={{ fontSize: 12, color: textMuted, background: "#2C2A26", border: "1px solid #35322D", borderRadius: 20, padding: "5px 12px" }}
-                >
-                  {s.name}{s.phone ? ` · ${s.phone}` : ""}
-                </span>
-              ))}
+              {suppliersList.map((s) => {
+                const active = historySearch.trim().toLowerCase() === s.name.trim().toLowerCase();
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setHistorySearch(active ? "" : s.name)}
+                    style={{
+                      fontSize: 12,
+                      color: active ? "#1C1B1A" : textMuted,
+                      background: active ? accent : "#2C2A26",
+                      border: active ? `1px solid ${accent}` : "1px solid #35322D",
+                      borderRadius: 20,
+                      padding: "5px 12px",
+                      fontWeight: active ? 700 : 400,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {s.name}{s.phone ? ` · ${s.phone}` : ""}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
