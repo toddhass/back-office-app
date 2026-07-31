@@ -149,7 +149,7 @@ export default function DigestScreen() {
         {groups.map((group) => {
           const isSent = sent[group.supplier];
           return (
-            <div key={group.supplier} style={{ background: card, border: `1px solid ${isSent ? "#3D4A38" : "#35322D"}`, borderRadius: 10, overflow: "hidden" }}>
+            <div key={group.supplier} style={{ background: card, border: `1px solid ${isSent ? "#BFE3D0" : "#E2E6ED"}`, borderRadius: 10, overflow: "hidden" }}>
               <button
                 onClick={() => toggleGroup(group.supplier)}
                 style={{
@@ -178,7 +178,7 @@ export default function DigestScreen() {
                 <div style={{ padding: "0 16px 16px" }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
                     {group.items.map((item) => (
-                      <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", background: "#2C2A26", borderRadius: 8 }}>
+                      <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", background: "#F1F4F8", borderRadius: 8 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <AlertTriangle size={13} color={item.current_stock === 0 ? danger : accent} />
                           <div>
@@ -192,7 +192,7 @@ export default function DigestScreen() {
                                   autoFocus
                                   onBlur={(e) => updateParLevel(item.id, e.target.value)}
                                   onKeyDown={(e) => e.key === "Enter" && updateParLevel(item.id, e.target.value)}
-                                  style={{ width: 40, background: "#1C1B1A", border: "1px solid #45413A", borderRadius: 4, padding: "2px 4px", color: textPrimary, fontSize: 11, fontFamily: mono }}
+                                  style={{ width: 40, background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 4, padding: "2px 4px", color: textPrimary, fontSize: 11, fontFamily: mono }}
                                 />
                                 <span style={{ fontSize: 11, color: textMuted }}>{item.unit}</span>
                               </div>
@@ -218,8 +218,8 @@ export default function DigestScreen() {
                     rows={group.items.length + 2}
                     style={{
                       width: "100%",
-                      background: "#1C1B1A",
-                      border: "1px solid #3A3733",
+                      background: "#F9FAFB",
+                      border: "1px solid #E2E6ED",
                       borderRadius: 8,
                       padding: "10px 12px",
                       color: textPrimary,
@@ -234,7 +234,7 @@ export default function DigestScreen() {
                   <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                     <button
                       onClick={() => copyDraft(group.supplier)}
-                      style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "none", border: "1px solid #45413A", borderRadius: 8, padding: "10px", color: textMuted, fontSize: 13, cursor: "pointer" }}
+                      style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "none", border: "1px solid #D6DCE5", borderRadius: 8, padding: "10px", color: textMuted, fontSize: 13, cursor: "pointer" }}
                     >
                       {copied === group.supplier ? <Check size={14} /> : <Copy size={14} />}
                       {copied === group.supplier ? "Copied" : "Copy"}
@@ -257,11 +257,11 @@ export default function DigestScreen() {
                         alignItems: "center",
                         justifyContent: "center",
                         gap: 6,
-                        background: isSent ? "#3D4A38" : accent,
+                        background: isSent ? "#BFE3D0" : accent,
                         border: "none",
                         borderRadius: 8,
                         padding: "10px",
-                        color: isSent ? good : "#1C1B1A",
+                        color: isSent ? good : "#FFFFFF",
                         fontWeight: 600,
                         fontSize: 13,
                         cursor: isSent ? "default" : "pointer",

@@ -56,7 +56,7 @@ export default function HomeScreen({ onNavigate }) {
 
       <div style={{ padding: "16px 16px 8px", display: "flex", flexDirection: "column", gap: 10 }}>
         {!loading && allClear && (
-          <div style={{ background: card, border: "1px solid #2E3A2A", borderRadius: 10, padding: "20px 18px", display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ background: card, border: "1px solid #BFE3D0", borderRadius: 10, padding: "20px 18px", display: "flex", alignItems: "center", gap: 10 }}>
             <CheckCircle2 size={20} color={good} />
             <div style={{ fontSize: 14, color: textPrimary }}>Nothing waiting on you right now.</div>
           </div>
@@ -65,7 +65,7 @@ export default function HomeScreen({ onNavigate }) {
         {!loading && pendingCount > 0 && (
           <button
             onClick={() => onNavigate("invoices")}
-            style={{ width: "100%", textAlign: "left", background: card, border: "1px solid #35322D", borderRadius: 10, padding: "16px 18px", color: textPrimary, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+            style={{ width: "100%", textAlign: "left", background: card, border: "1px solid #E2E6ED", borderRadius: 10, padding: "16px 18px", color: textPrimary, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <Receipt size={18} color={accent} />
@@ -85,7 +85,7 @@ export default function HomeScreen({ onNavigate }) {
         {!loading && belowParCount > 0 && (
           <button
             onClick={() => onNavigate("digest")}
-            style={{ width: "100%", textAlign: "left", background: card, border: "1px solid #35322D", borderRadius: 10, padding: "16px 18px", color: textPrimary, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+            style={{ width: "100%", textAlign: "left", background: card, border: "1px solid #E2E6ED", borderRadius: 10, padding: "16px 18px", color: textPrimary, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <ClipboardList size={18} color={accent} />
@@ -97,7 +97,7 @@ export default function HomeScreen({ onNavigate }) {
 
         <button
           onClick={() => onNavigate("capture")}
-          style={{ width: "100%", textAlign: "left", background: "none", border: "1px dashed #35322D", borderRadius: 10, padding: "16px 18px", color: textMuted, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}
+          style={{ width: "100%", textAlign: "left", background: "none", border: "1px dashed #E2E6ED", borderRadius: 10, padding: "16px 18px", color: textMuted, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}
         >
           <Camera size={18} />
           <div style={{ fontSize: 14 }}>Upload a new invoice</div>

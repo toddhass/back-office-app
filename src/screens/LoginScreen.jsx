@@ -6,11 +6,11 @@ import { bg, card, textPrimary, textMuted, accent, danger, sans } from "../lib/t
 
 const inputStyle = {
   width: "100%",
-  background: "#1C1B1A",
-  border: "1px solid #45413A",
+  background: "#F9FAFB",
+  border: "1px solid #D6DCE5",
   borderRadius: 8,
   padding: "12px 14px",
-  color: "#EDEAE4",
+  color: "#16202E",
   fontSize: 14,
   boxSizing: "border-box",
   marginBottom: 10,
@@ -98,7 +98,7 @@ export default function LoginScreen() {
     <div style={{ minHeight: "100vh", background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: sans, padding: 20, color: textPrimary }}>
       <div style={{ width: "100%", maxWidth: 380 }}>
         <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#3A2E1C", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
+          <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#E7F0FA", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
             <Store size={24} color={accent} />
           </div>
           <h1 style={{ color: textPrimary, fontSize: 22, fontWeight: 700, margin: 0 }}>Back Office</h1>
@@ -107,7 +107,7 @@ export default function LoginScreen() {
           </div>
         </div>
 
-        <form onSubmit={mode === "signin" ? handleSignIn : handleSignUp} style={{ background: card, border: "1px solid #35322D", borderRadius: 12, padding: 20 }}>
+        <form onSubmit={mode === "signin" ? handleSignIn : handleSignUp} style={{ background: card, border: "1px solid #E2E6ED", borderRadius: 12, padding: 20 }}>
           <label style={{ fontSize: 12, color: textMuted, display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
             <Mail size={13} /> Email
           </label>
@@ -128,8 +128,8 @@ export default function LoginScreen() {
                     flex: 1,
                     padding: "8px",
                     borderRadius: 8,
-                    border: joinMethod === "new" ? `1px solid ${accent}` : "1px solid #45413A",
-                    background: joinMethod === "new" ? "#332B1C" : "none",
+                    border: joinMethod === "new" ? `1px solid ${accent}` : "1px solid #D6DCE5",
+                    background: joinMethod === "new" ? "#E7F0FA" : "none",
                     color: joinMethod === "new" ? accent : textMuted,
                     fontSize: 12,
                     cursor: "pointer",
@@ -144,8 +144,8 @@ export default function LoginScreen() {
                     flex: 1,
                     padding: "8px",
                     borderRadius: 8,
-                    border: joinMethod === "invite" ? `1px solid ${accent}` : "1px solid #45413A",
-                    background: joinMethod === "invite" ? "#332B1C" : "none",
+                    border: joinMethod === "invite" ? `1px solid ${accent}` : "1px solid #D6DCE5",
+                    background: joinMethod === "invite" ? "#E7F0FA" : "none",
                     color: joinMethod === "invite" ? accent : textMuted,
                     fontSize: 12,
                     cursor: "pointer",
@@ -174,7 +174,7 @@ export default function LoginScreen() {
           )}
 
           {error && (
-            <div style={{ color: danger, fontSize: 13, marginBottom: 10, fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.4, border: "1px solid #4A2E28", background: "#2A1E1B", borderRadius: 6, padding: 8 }}>
+            <div style={{ color: danger, fontSize: 13, marginBottom: 10, fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.4, border: "1px solid #F3B8B8", background: "#FDECEC", borderRadius: 6, padding: 8 }}>
               {error}
             </div>
           )}
@@ -183,7 +183,7 @@ export default function LoginScreen() {
             type="button"
             disabled={loading}
             onClick={(e) => (mode === "signin" ? handleSignIn(e) : handleSignUp(e))}
-            style={{ width: "100%", background: accent, border: "none", borderRadius: 8, padding: "12px", color: "#1C1B1A", fontWeight: 700, fontSize: 14, cursor: "pointer", marginTop: 4 }}
+            style={{ width: "100%", background: accent, border: "none", borderRadius: 8, padding: "12px", color: "#FFFFFF", fontWeight: 700, fontSize: 14, cursor: "pointer", marginTop: 4 }}
           >
             {loading ? "Please wait…" : mode === "signin" ? "Sign in" : "Create account"}
           </button>

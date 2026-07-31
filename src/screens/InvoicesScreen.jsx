@@ -9,7 +9,7 @@ function ConfidenceBar({ score }) {
   const color = score >= 0.85 ? good : score >= 0.5 ? accent : danger;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <div style={{ flex: 1, height: 4, background: "#3A3733", borderRadius: 2, overflow: "hidden" }}>
+      <div style={{ flex: 1, height: 4, background: "#E2E6ED", borderRadius: 2, overflow: "hidden" }}>
         <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 2 }} />
       </div>
       <span style={{ fontFamily: mono, fontSize: 12, color, minWidth: 32, textAlign: "right" }}>{pct}%</span>
@@ -21,7 +21,7 @@ function TicketDivider() {
   return (
     <div style={{ display: "flex", justifyContent: "center", gap: 6, padding: "4px 0" }}>
       {Array.from({ length: 28 }).map((_, i) => (
-        <div key={i} style={{ width: 4, height: 4, borderRadius: "50%", background: "#3A3733" }} />
+        <div key={i} style={{ width: 4, height: 4, borderRadius: "50%", background: "#E2E6ED" }} />
       ))}
     </div>
   );
@@ -386,18 +386,18 @@ export default function InvoicesScreen() {
           </div>
 
           {showAddVendor && (
-            <div style={{ background: card, border: "1px solid #35322D", borderRadius: 8, padding: 12, marginBottom: 10 }}>
+            <div style={{ background: card, border: "1px solid #E2E6ED", borderRadius: 8, padding: 12, marginBottom: 10 }}>
               <input
                 placeholder="Vendor name"
                 value={newVendorName}
                 onChange={(e) => setNewVendorName(e.target.value)}
-                style={{ width: "100%", background: "#1C1B1A", border: "1px solid #45413A", borderRadius: 6, padding: "8px 10px", color: textPrimary, fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
+                style={{ width: "100%", background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 6, padding: "8px 10px", color: textPrimary, fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
               />
               <input
                 placeholder="Phone (optional)"
                 value={vendorPhone}
                 onChange={(e) => setVendorPhone(e.target.value)}
-                style={{ width: "100%", background: "#1C1B1A", border: "1px solid #45413A", borderRadius: 6, padding: "8px 10px", color: textPrimary, fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
+                style={{ width: "100%", background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 6, padding: "8px 10px", color: textPrimary, fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
               />
               {addVendorError && <div style={{ color: danger, fontSize: 12, marginBottom: 8 }}>{addVendorError}</div>}
               <button
@@ -405,11 +405,11 @@ export default function InvoicesScreen() {
                 disabled={!newVendorName.trim() || addingVendor}
                 style={{
                   width: "100%",
-                  background: newVendorName.trim() ? accent : "#45413A",
+                  background: newVendorName.trim() ? accent : "#D6DCE5",
                   border: "none",
                   borderRadius: 6,
                   padding: "9px 12px",
-                  color: "#1C1B1A",
+                  color: "#FFFFFF",
                   fontWeight: 600,
                   fontSize: 13,
                   cursor: newVendorName.trim() ? "pointer" : "not-allowed",
@@ -430,9 +430,9 @@ export default function InvoicesScreen() {
                     onClick={() => setHistorySearch(active ? "" : s.name)}
                     style={{
                       fontSize: 12,
-                      color: active ? "#1C1B1A" : textMuted,
-                      background: active ? accent : "#2C2A26",
-                      border: active ? `1px solid ${accent}` : "1px solid #35322D",
+                      color: active ? "#FFFFFF" : textMuted,
+                      background: active ? accent : "#F1F4F8",
+                      border: active ? `1px solid ${accent}` : "1px solid #E2E6ED",
                       borderRadius: 20,
                       padding: "5px 12px",
                       fontWeight: active ? 700 : 400,
@@ -458,7 +458,7 @@ export default function InvoicesScreen() {
               placeholder="Search by vendor…"
               value={historySearch}
               onChange={(e) => setHistorySearch(e.target.value)}
-              style={{ width: "100%", background: card, border: "1px solid #35322D", borderRadius: 8, padding: "9px 10px 9px 32px", color: textPrimary, fontSize: 13, boxSizing: "border-box" }}
+              style={{ width: "100%", background: card, border: "1px solid #E2E6ED", borderRadius: 8, padding: "9px 10px 9px 32px", color: textPrimary, fontSize: 13, boxSizing: "border-box" }}
             />
           </div>
         )}
@@ -485,7 +485,7 @@ export default function InvoicesScreen() {
                 width: "100%",
                 textAlign: "left",
                 background: card,
-                border: "1px solid #35322D",
+                border: "1px solid #E2E6ED",
                 borderRadius: 10,
                 padding: "14px 16px",
                 color: textPrimary,
@@ -530,7 +530,7 @@ export default function InvoicesScreen() {
 
         <div style={{ padding: "8px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
           {histItems.map((item) => (
-            <div key={item.id} style={{ background: card, border: "1px solid #35322D", borderRadius: 8, padding: "10px 12px" }}>
+            <div key={item.id} style={{ background: card, border: "1px solid #E2E6ED", borderRadius: 8, padding: "10px 12px" }}>
               <div style={{ fontSize: 13, fontWeight: 600 }}>{item.inventory_items?.name || item.raw_description}</div>
               <div style={{ fontSize: 11, color: textMuted, fontFamily: mono, marginTop: 2 }}>
                 {item.quantity} {item.unit} &middot; ${Number(item.line_total || 0).toFixed(2)}
@@ -539,7 +539,7 @@ export default function InvoicesScreen() {
           ))}
         </div>
 
-        <div style={{ padding: "16px", display: "flex", justifyContent: "space-between", borderTop: "1px solid #2A2825", marginTop: 8 }}>
+        <div style={{ padding: "16px", display: "flex", justifyContent: "space-between", borderTop: "1px solid #E2E6ED", marginTop: 8 }}>
           <span style={{ color: textMuted, fontSize: 13 }}>Total</span>
           <span style={{ fontFamily: mono, color: accent, fontSize: 15 }}>${Number(histInv.invoice_total || 0).toFixed(2)}</span>
         </div>
@@ -585,7 +585,7 @@ export default function InvoicesScreen() {
                 loadHistory();
                 loadSuppliers();
               }}
-              style={{ marginTop: 16, background: "none", border: "1px solid #35322D", borderRadius: 8, padding: "10px 16px", color: textMuted, cursor: "pointer", fontSize: 13 }}
+              style={{ marginTop: 16, background: "none", border: "1px solid #E2E6ED", borderRadius: 8, padding: "10px 16px", color: textMuted, cursor: "pointer", fontSize: 13 }}
             >
               View past invoices
             </button>
@@ -601,7 +601,7 @@ export default function InvoicesScreen() {
                 width: "100%",
                 textAlign: "left",
                 background: card,
-                border: "1px solid #35322D",
+                border: "1px solid #E2E6ED",
                 borderRadius: 10,
                 padding: "16px 18px",
                 color: textPrimary,
@@ -624,7 +624,7 @@ export default function InvoicesScreen() {
                     display: "inline-flex",
                     alignItems: "center",
                     gap: 6,
-                    background: "#3A2E1C",
+                    background: "#E7F0FA",
                     color: accent,
                     fontSize: 12,
                     fontWeight: 600,
@@ -641,7 +641,7 @@ export default function InvoicesScreen() {
                     display: "inline-flex",
                     alignItems: "center",
                     gap: 6,
-                    background: "#3A2E1C",
+                    background: "#E7F0FA",
                     color: accent,
                     fontSize: 12,
                     fontWeight: 600,
@@ -682,7 +682,7 @@ export default function InvoicesScreen() {
         </div>
 
         <div style={{ padding: "8px 16px" }}>
-          <div style={{ background: card, border: "1px solid #35322D", borderRadius: 10, padding: 18 }}>
+          <div style={{ background: card, border: "1px solid #E2E6ED", borderRadius: 10, padding: 18 }}>
             <div style={{ fontFamily: mono, fontSize: 15, marginBottom: 4 }}>"{rawName}"</div>
             <div style={{ color: textMuted, fontSize: 13, marginBottom: 14 }}>
               We couldn't confidently match this to an existing vendor.
@@ -704,8 +704,8 @@ export default function InvoicesScreen() {
                         gap: 10,
                         padding: "10px 12px",
                         borderRadius: 8,
-                        background: vendorSelection === c.id ? "#332B1C" : "#2C2A26",
-                        border: vendorSelection === c.id ? `1px solid ${accent}` : "1px solid #35322D",
+                        background: vendorSelection === c.id ? "#E7F0FA" : "#F1F4F8",
+                        border: vendorSelection === c.id ? `1px solid ${accent}` : "1px solid #E2E6ED",
                         cursor: "pointer",
                       }}
                     >
@@ -732,27 +732,27 @@ export default function InvoicesScreen() {
                   setShowNewVendorConfirm(true);
                   setNewVendorConfirmName(rawName);
                 }}
-                style={{ marginTop: 10, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "none", border: "1px dashed #45413A", borderRadius: 8, padding: "10px 12px", color: textMuted, fontSize: 13, cursor: "pointer" }}
+                style={{ marginTop: 10, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "none", border: "1px dashed #D6DCE5", borderRadius: 8, padding: "10px 12px", color: textMuted, fontSize: 13, cursor: "pointer" }}
               >
                 <Plus size={14} /> None of these — new vendor
               </button>
             ) : (
-              <div style={{ marginTop: 10, background: "#2C2A26", borderRadius: 8, padding: 12 }}>
+              <div style={{ marginTop: 10, background: "#F1F4F8", borderRadius: 8, padding: 12 }}>
                 <input
                   value={newVendorConfirmName}
                   onChange={(e) => setNewVendorConfirmName(e.target.value)}
-                  style={{ width: "100%", background: "#1C1B1A", border: "1px solid #45413A", borderRadius: 6, padding: "8px 10px", color: textPrimary, fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
+                  style={{ width: "100%", background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 6, padding: "8px 10px", color: textPrimary, fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
                 />
                 <input
                   placeholder="Phone (optional)"
                   value={vendorPhone}
                   onChange={(e) => setVendorPhone(e.target.value)}
-                  style={{ width: "100%", background: "#1C1B1A", border: "1px solid #45413A", borderRadius: 6, padding: "8px 10px", color: textPrimary, fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
+                  style={{ width: "100%", background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 6, padding: "8px 10px", color: textPrimary, fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
                 />
                 <button
                   onClick={confirmNewVendorFromInvoice}
                   disabled={!newVendorConfirmName.trim() || confirmingVendor}
-                  style={{ width: "100%", background: newVendorConfirmName.trim() ? accent : "#45413A", border: "none", borderRadius: 6, padding: "9px 12px", color: "#1C1B1A", fontWeight: 600, fontSize: 13, cursor: newVendorConfirmName.trim() ? "pointer" : "not-allowed" }}
+                  style={{ width: "100%", background: newVendorConfirmName.trim() ? accent : "#D6DCE5", border: "none", borderRadius: 6, padding: "9px 12px", color: "#FFFFFF", fontWeight: 600, fontSize: 13, cursor: newVendorConfirmName.trim() ? "pointer" : "not-allowed" }}
                 >
                   {confirmingVendor ? "Saving…" : "Create vendor"}
                 </button>
@@ -771,8 +771,8 @@ export default function InvoicesScreen() {
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 8,
-                background: vendorSelection ? accent : "#35322D",
-                color: vendorSelection ? "#1C1B1A" : textMuted,
+                background: vendorSelection ? accent : "#E2E6ED",
+                color: vendorSelection ? "#FFFFFF" : textMuted,
                 border: "none",
                 borderRadius: 10,
                 padding: "13px",
@@ -806,12 +806,12 @@ export default function InvoicesScreen() {
         <button
           onClick={() => setShowInvoicePhoto((s) => !s)}
           disabled={!invoicePhotoUrl}
-          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "none", border: "1px dashed #45413A", borderRadius: 8, padding: "10px", color: invoicePhotoUrl ? textMuted : "#4A473F", fontSize: 12, cursor: invoicePhotoUrl ? "pointer" : "not-allowed" }}
+          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "none", border: "1px dashed #D6DCE5", borderRadius: 8, padding: "10px", color: invoicePhotoUrl ? textMuted : "#CBD2DC", fontSize: 12, cursor: invoicePhotoUrl ? "pointer" : "not-allowed" }}
         >
           <Camera size={13} /> {showInvoicePhoto ? "Hide" : "View"} original invoice photo
         </button>
         {showInvoicePhoto && invoicePhotoUrl && (
-          <img src={invoicePhotoUrl} alt="Invoice" style={{ width: "100%", borderRadius: 8, marginTop: 8, border: "1px solid #35322D" }} />
+          <img src={invoicePhotoUrl} alt="Invoice" style={{ width: "100%", borderRadius: 8, marginTop: 8, border: "1px solid #E2E6ED" }} />
         )}
       </div>
 
@@ -824,10 +824,10 @@ export default function InvoicesScreen() {
 
       {currentItem && (
         <div style={{ padding: "8px 16px" }}>
-          <div style={{ background: card, border: "1px solid #35322D", borderRadius: 10, padding: 18 }}>
+          <div style={{ background: card, border: "1px solid #E2E6ED", borderRadius: 10, padding: 18 }}>
             <div style={{ fontFamily: mono, fontSize: 15, marginBottom: 4 }}>"{currentItem.raw_description}"</div>
             {currentItem.shipment_note && (
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 6, background: "#3A2E1C", border: "1px solid #4A3A22", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 12, color: accent }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 6, background: "#E7F0FA", border: "1px solid #BFDCF0", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 12, color: accent }}>
                 <AlertTriangle size={13} style={{ marginTop: 1, flexShrink: 0 }} />
                 <span>{currentItem.shipment_note}</span>
               </div>
@@ -847,7 +847,7 @@ export default function InvoicesScreen() {
                   type="number"
                   defaultValue={currentItem.quantity}
                   onBlur={(e) => updateLineItemValue(currentItem.id, "quantity", e.target.value)}
-                  style={{ width: 60, background: "#1C1B1A", border: "1px solid #45413A", borderRadius: 6, padding: "6px 8px", color: textPrimary, fontSize: 13 }}
+                  style={{ width: 60, background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 6, padding: "6px 8px", color: textPrimary, fontSize: 13 }}
                 />
                 <span style={{ color: textMuted, fontSize: 13 }}>{currentItem.unit} @ $</span>
                 <input
@@ -855,9 +855,9 @@ export default function InvoicesScreen() {
                   step="0.01"
                   defaultValue={currentItem.unit_price}
                   onBlur={(e) => updateLineItemValue(currentItem.id, "unit_price", e.target.value)}
-                  style={{ width: 70, background: "#1C1B1A", border: "1px solid #45413A", borderRadius: 6, padding: "6px 8px", color: textPrimary, fontSize: 13 }}
+                  style={{ width: 70, background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 6, padding: "6px 8px", color: textPrimary, fontSize: 13 }}
                 />
-                <button onClick={() => setEditingQty(false)} style={{ background: accent, border: "none", borderRadius: 6, padding: "6px 10px", color: "#1C1B1A", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                <button onClick={() => setEditingQty(false)} style={{ background: accent, border: "none", borderRadius: 6, padding: "6px 10px", color: "#FFFFFF", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                   Done
                 </button>
               </div>
@@ -880,8 +880,8 @@ export default function InvoicesScreen() {
                       gap: 10,
                       padding: "10px 12px",
                       borderRadius: 8,
-                      background: currentItem.inventory_item_id === c.id ? "#332B1C" : "#2C2A26",
-                      border: currentItem.inventory_item_id === c.id ? `1px solid ${accent}` : "1px solid #35322D",
+                      background: currentItem.inventory_item_id === c.id ? "#E7F0FA" : "#F1F4F8",
+                      border: currentItem.inventory_item_id === c.id ? `1px solid ${accent}` : "1px solid #E2E6ED",
                       cursor: "pointer",
                     }}
                   >
@@ -913,7 +913,7 @@ export default function InvoicesScreen() {
                   justifyContent: "center",
                   gap: 6,
                   background: "none",
-                  border: "1px dashed #45413A",
+                  border: "1px dashed #D6DCE5",
                   borderRadius: 8,
                   padding: "10px 12px",
                   color: textMuted,
@@ -924,15 +924,15 @@ export default function InvoicesScreen() {
                 <Plus size={14} /> Something else / new item
               </button>
             ) : (
-              <div style={{ marginTop: 10, background: "#2C2A26", borderRadius: 8, padding: 12 }}>
+              <div style={{ marginTop: 10, background: "#F1F4F8", borderRadius: 8, padding: 12 }}>
                 <input
                   placeholder="Item name"
                   value={newItemName}
                   onChange={(e) => setNewItemName(e.target.value)}
                   style={{
                     width: "100%",
-                    background: "#1C1B1A",
-                    border: "1px solid #45413A",
+                    background: "#F9FAFB",
+                    border: "1px solid #D6DCE5",
                     borderRadius: 6,
                     padding: "8px 10px",
                     color: textPrimary,
@@ -946,11 +946,11 @@ export default function InvoicesScreen() {
                   disabled={!newItemName}
                   style={{
                     width: "100%",
-                    background: newItemName ? accent : "#45413A",
+                    background: newItemName ? accent : "#D6DCE5",
                     border: "none",
                     borderRadius: 6,
                     padding: "9px 12px",
-                    color: "#1C1B1A",
+                    color: "#FFFFFF",
                     fontWeight: 600,
                     fontSize: 13,
                     cursor: newItemName ? "pointer" : "not-allowed",
@@ -972,8 +972,8 @@ export default function InvoicesScreen() {
               alignItems: "center",
               justifyContent: "center",
               gap: 8,
-              background: currentItem.inventory_item_id ? accent : "#35322D",
-              color: currentItem.inventory_item_id ? "#1C1B1A" : textMuted,
+              background: currentItem.inventory_item_id ? accent : "#E2E6ED",
+              color: currentItem.inventory_item_id ? "#FFFFFF" : textMuted,
               border: "none",
               borderRadius: 10,
               padding: "13px",
@@ -1011,8 +1011,8 @@ export default function InvoicesScreen() {
           disabled={!allResolved}
           style={{
             width: "100%",
-            background: allResolved ? good : "#2C2A26",
-            color: allResolved ? "#1C1B1A" : textMuted,
+            background: allResolved ? good : "#F1F4F8",
+            color: allResolved ? "#FFFFFF" : textMuted,
             border: "none",
             borderRadius: 10,
             padding: "14px",

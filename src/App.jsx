@@ -7,11 +7,13 @@ import DigestScreen from "./screens/DigestScreen";
 import LoginScreen from "./screens/LoginScreen";
 import { useAuth } from "./lib/AuthContext";
 import { supabase } from "./lib/supabaseClient";
-import { bg, sans, textMuted, accent, danger, card, textPrimary } from "./lib/tokens";
+import { useIsDesktop } from "./lib/useIsDesktop";
+import { bg, sans, textMuted, accent, card, textPrimary, border } from "./lib/tokens";
 
 export default function App() {
   const { session, restaurantId, restaurantName, loading } = useAuth();
   const [tab, setTab] = useState("home");
+  const isDesktop = useIsDesktop();
 
   if (loading) {
     return <div style={{ background: bg, minHeight: "100vh", color: textMuted, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: sans }}>Loading…</div>;
@@ -22,12 +24,10 @@ export default function App() {
   }
 
   if (!restaurantId) {
-    // Signed in but not yet linked to a restaurant — shouldn't normally happen
-    // since signup wires this up, but covers edge cases (e.g. invite pending).
     return (
       <div style={{ background: bg, minHeight: "100vh", color: textMuted, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: sans, gap: 12, padding: 20, textAlign: "center" }}>
         <div>No restaurant linked to this account yet.</div>
-        <button onClick={() => supabase.auth.signOut()} style={{ background: "none", border: "1px solid #45413A", borderRadius: 8, padding: "8px 16px", color: textMuted, cursor: "pointer" }}>
+        <button onClick={() => supabase.auth.signOut()} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "8px 16px", color: textMuted, cursor: "pointer" }}>
           Sign out
         </button>
       </div>
@@ -41,6 +41,60 @@ export default function App() {
     { key: "digest", label: "Reorder", icon: ClipboardList },
   ];
 
+  const activeScreen =
+    tab === "home" ? <HomeScreen onNavigate={setTab} /> :
+    tab === "capture" ? <CaptureScreen onDone={() => setTab("invoices")} /> :
+    tab === "invoices" ? <InvoicesScreen /> :
+    <DigestScreen />;
+
+  if (isDesktop) {
+    return (
+      <div style={{ background: bg, minHeight: "100vh", fontFamily: sans, color: textPrimary, display: "flex" }}>
+        {/* Sidebar */}
+        <div style={{ width: 240, flexShrink: 0, background: card, borderRight: `1px solid ${border}`, minHeight: "100vh", display: "flex", flexDirection: "column", padding: "24px 16px" }}>
+          <div style={{ padding: "0 8px 24px", fontWeight: 700, fontSize: 15, letterSpacing: -0.2 }}>{restaurantName}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {tabs.map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: tab === key ? "#E7F0FA" : "none",
+                  color: tab === key ? accent : textMuted,
+                  fontWeight: tab === key ? 600 : 500,
+                  fontSize: 14,
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+              >
+                <Icon size={17} />
+                {label}
+              </button>
+            ))}
+          </div>
+          <div style={{ flex: 1 }} />
+          <button
+            onClick={() => supabase.auth.signOut()}
+            style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 13 }}
+          >
+            <LogOut size={14} /> Sign out
+          </button>
+        </div>
+
+        {/* Content */}
+        <div style={{ flex: 1, display: "flex", justifyContent: "center", padding: "32px 24px" }}>
+          <div style={{ width: "100%", maxWidth: 720 }}>{activeScreen}</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ background: bg, minHeight: "100vh", fontFamily: sans, color: textPrimary }}>
       <div style={{ maxWidth: 420, margin: "0 auto", position: "relative" }}>
@@ -50,7 +104,7 @@ export default function App() {
             justifyContent: "space-between",
             alignItems: "center",
             padding: "10px 16px",
-            borderBottom: "1px solid #2A2825",
+            borderBottom: `1px solid ${border}`,
             background: card,
           }}
         >
@@ -62,12 +116,7 @@ export default function App() {
             <LogOut size={12} /> Sign out
           </button>
         </div>
-        <div style={{ paddingBottom: 76 }}>
-          {tab === "home" && <HomeScreen onNavigate={setTab} />}
-          {tab === "capture" && <CaptureScreen onDone={() => setTab("invoices")} />}
-          {tab === "invoices" && <InvoicesScreen />}
-          {tab === "digest" && <DigestScreen />}
-        </div>
+        <div style={{ paddingBottom: 76 }}>{activeScreen}</div>
 
         <div
           style={{
@@ -77,8 +126,8 @@ export default function App() {
             transform: "translateX(-50%)",
             width: "100%",
             maxWidth: 420,
-            background: "#201F1C",
-            borderTop: "1px solid #35322D",
+            background: "#FFFFFF",
+            borderTop: `1px solid ${border}`,
             display: "flex",
             padding: "10px 12px 16px",
             gap: 8,

@@ -173,13 +173,13 @@ export default function CaptureScreen({ onDone }) {
                 justifyContent: "center",
                 gap: 10,
                 background: card,
-                border: "1px dashed #45413A",
+                border: "1px dashed #D6DCE5",
                 borderRadius: 14,
                 padding: "40px 20px",
                 cursor: "pointer",
               }}
             >
-              <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#3A2E1C", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#E7F0FA", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Camera size={24} color={accent} />
               </div>
               <div style={{ fontWeight: 600, fontSize: 15 }}>Take a photo</div>
@@ -201,7 +201,7 @@ export default function CaptureScreen({ onDone }) {
                 justifyContent: "center",
                 gap: 8,
                 background: "none",
-                border: "1px solid #35322D",
+                border: "1px solid #E2E6ED",
                 borderRadius: 10,
                 padding: "14px",
                 cursor: "pointer",
@@ -217,7 +217,7 @@ export default function CaptureScreen({ onDone }) {
         )}
 
         {(status === "uploading" || status === "processing") && (
-          <div style={{ background: card, border: "1px solid #35322D", borderRadius: 14, padding: "36px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 16, textAlign: "center" }}>
+          <div style={{ background: card, border: "1px solid #E2E6ED", borderRadius: 14, padding: "36px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 16, textAlign: "center" }}>
             <Loader2 size={30} color={accent} style={{ animation: "spin 1s linear infinite" }} />
             <div>
               <div style={{ fontWeight: 600, fontSize: 15 }}>{status === "uploading" ? "Uploading…" : "Reading invoice…"}</div>
@@ -253,7 +253,7 @@ export default function CaptureScreen({ onDone }) {
             </div>
             <button
               onClick={onDone}
-              style={{ width: "100%", marginTop: 12, background: accent, border: "none", borderRadius: 10, padding: "13px", color: "#1C1B1A", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+              style={{ width: "100%", marginTop: 12, background: accent, border: "none", borderRadius: 10, padding: "13px", color: "#FFFFFF", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
             >
               Review now
             </button>
@@ -269,7 +269,7 @@ export default function CaptureScreen({ onDone }) {
               <Copy size={26} color={accent} />
               <div style={{ fontWeight: 600, fontSize: 15 }}>Already uploaded</div>
               <div style={{ fontSize: 13, color: textMuted, maxWidth: 280 }}>{errorMsg.replace(/^Duplicate:\s*/, "")}</div>
-              <button onClick={reset} style={{ marginTop: 8, background: accent, border: "none", borderRadius: 10, padding: "12px 20px", color: "#1C1B1A", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+              <button onClick={reset} style={{ marginTop: 8, background: accent, border: "none", borderRadius: 10, padding: "12px 20px", color: "#FFFFFF", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
                 Upload a different invoice
               </button>
             </div>
@@ -277,15 +277,15 @@ export default function CaptureScreen({ onDone }) {
             <div style={{ background: card, border: `1px solid ${danger}`, borderRadius: 14, padding: "28px 22px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10, textAlign: "center" }}>
               <XCircle size={28} color={danger} />
               <div style={{ fontWeight: 600, fontSize: 15 }}>Couldn't read that invoice</div>
-              <div style={{ fontSize: 12, color: textMuted, fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-word", textAlign: "left", background: "#2A1E1B", border: "1px solid #4A2E28", borderRadius: 6, padding: 8, maxHeight: 200, overflowY: "auto" }}>{errorMsg || "Try retaking the photo with better lighting, or upload the PDF directly."}</div>
-              <button onClick={reset} style={{ marginTop: 8, background: accent, border: "none", borderRadius: 10, padding: "12px 20px", color: "#1C1B1A", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+              <div style={{ fontSize: 12, color: textMuted, fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-word", textAlign: "left", background: "#FDECEC", border: "1px solid #F3B8B8", borderRadius: 6, padding: 8, maxHeight: 200, overflowY: "auto" }}>{errorMsg || "Try retaking the photo with better lighting, or upload the PDF directly."}</div>
+              <button onClick={reset} style={{ marginTop: 8, background: accent, border: "none", borderRadius: 10, padding: "12px 20px", color: "#FFFFFF", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
                 Try again
               </button>
             </div>
           )
         )}
         {status === "batch-processing" && (
-          <div style={{ background: card, border: "1px solid #35322D", borderRadius: 14, padding: "36px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 16, textAlign: "center" }}>
+          <div style={{ background: card, border: "1px solid #E2E6ED", borderRadius: 14, padding: "36px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 16, textAlign: "center" }}>
             <Loader2 size={30} color={accent} style={{ animation: "spin 1s linear infinite" }} />
             <div>
               <div style={{ fontWeight: 600, fontSize: 15 }}>
@@ -320,7 +320,7 @@ export default function CaptureScreen({ onDone }) {
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    background: "#2C2A26",
+                    background: "#F1F4F8",
                     borderRadius: 8,
                     padding: "8px 10px",
                     fontSize: 12,
@@ -340,7 +340,7 @@ export default function CaptureScreen({ onDone }) {
             </div>
             <button
               onClick={onDone}
-              style={{ width: "100%", marginTop: 12, background: accent, border: "none", borderRadius: 10, padding: "13px", color: "#1C1B1A", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+              style={{ width: "100%", marginTop: 12, background: accent, border: "none", borderRadius: 10, padding: "13px", color: "#FFFFFF", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
             >
               Review now
             </button>
