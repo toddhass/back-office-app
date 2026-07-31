@@ -58,11 +58,12 @@ export default function DigestScreen() {
 
         const supplierName = lastLine?.invoices?.suppliers?.name || "Unassigned";
         const supplierPhone = lastLine?.invoices?.suppliers?.phone || null;
-        if (!grouped[supplierName]) grouped[supplierName] = { items: [], phone: supplierPhone };
+        const supplierId = lastLine?.invoices?.supplier_id || null;
+        if (!grouped[supplierName]) grouped[supplierName] = { items: [], phone: supplierPhone, supplierId };
         grouped[supplierName].items.push(item);
       }
 
-      const groupList = Object.entries(grouped).map(([supplier, g]) => ({ supplier, items: g.items, phone: g.phone }));
+      const groupList = Object.entries(grouped).map(([supplier, g]) => ({ supplier, items: g.items, phone: g.phone, supplierId: g.supplierId }));
       setGroups(groupList);
       setExpanded(Object.fromEntries(groupList.map((g) => [g.supplier, true])));
       setDrafts(Object.fromEntries(groupList.map((g) => [g.supplier, draftMessage(g.supplier, g.items)])));
@@ -94,6 +95,25 @@ export default function DigestScreen() {
       .in("id", itemIds);
 
     if (!error) {
+      // Record what we actually asked for, so a later invoice from this
+      // supplier can be checked for a short/partial shipment.
+      if (group.supplierId) {
+        const { data: po } = await supabase
+          .from("purchase_orders")
+          .insert({ restaurant_id: RESTAURANT_ID, supplier_id: group.supplierId, status: "sent" })
+          .select("id")
+          .single();
+
+        if (po) {
+          const poItems = group.items.map((item) => ({
+            purchase_order_id: po.id,
+            inventory_item_id: item.id,
+            quantity_ordered: suggestQty(item),
+          }));
+          await supabase.from("purchase_order_items").insert(poItems);
+        }
+      }
+
       setSent((s) => ({ ...s, [group.supplier]: true }));
       // Remove this group from the list after a brief pause so the
       // "Sent" state is visible before it disappears on next reload.

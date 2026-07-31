@@ -813,6 +813,12 @@ export default function InvoicesScreen() {
         <div style={{ padding: "8px 16px" }}>
           <div style={{ background: card, border: "1px solid #35322D", borderRadius: 10, padding: 18 }}>
             <div style={{ fontFamily: mono, fontSize: 15, marginBottom: 4 }}>"{currentItem.raw_description}"</div>
+            {currentItem.shipment_note && (
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 6, background: "#3A2E1C", border: "1px solid #4A3A22", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 12, color: accent }}>
+                <AlertTriangle size={13} style={{ marginTop: 1, flexShrink: 0 }} />
+                <span>{currentItem.shipment_note}</span>
+              </div>
+            )}
             {!editingQty ? (
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
                 <div style={{ color: textMuted, fontSize: 13 }}>
