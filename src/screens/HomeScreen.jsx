@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, sans } from "../lib/tokens";
@@ -101,6 +101,14 @@ export default function HomeScreen({ onNavigate }) {
         >
           <Camera size={18} />
           <div style={{ fontSize: 14 }}>Upload a new invoice</div>
+        </button>
+
+        <button
+          onClick={() => supabase.auth.signOut()}
+          style={{ width: "100%", textAlign: "center", background: "none", border: "none", padding: "16px 18px", color: textMuted, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 16, fontSize: 13 }}
+        >
+          <LogOut size={14} />
+          Sign out
         </button>
       </div>
     </div>
