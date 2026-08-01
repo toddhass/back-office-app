@@ -23,7 +23,7 @@ export default function DigestScreen() {
   const [expectedDates, setExpectedDates] = useState({});
   const [editingParId, setEditingParId] = useState(null);
   const [sentError, setSentError] = useState({});
-  const [autoPOMessage, setAutoPOMessage] = useState("");
+  const [autoPOMessage, setAutoPOMessage] = useState(null);
   const [confirmedPOs, setConfirmedPOs] = useState({});
 
   useEffect(() => {
@@ -113,11 +113,22 @@ export default function DigestScreen() {
     setEditingParId(null);
 
     const { data: poResult } = await supabase.rpc("auto_create_po_if_needed", { p_inventory_item_id: itemId });
+
     if (poResult?.created) {
-      setAutoPOMessage(`${poResult.po_number} created — ordered ${poResult.quantity} ${poResult.unit} of ${poResult.item_name} from ${poResult.supplier_name}.`);
-      setTimeout(() => setAutoPOMessage(""), 6000);
+      setAutoPOMessage({ text: `${poResult.po_number} created — ordered ${poResult.quantity} ${poResult.unit} of ${poResult.item_name} from ${poResult.supplier_name}.`, tone: "success" });
+      setTimeout(() => setAutoPOMessage(null), 6000);
       load(); // refresh - the item may now be covered by an open PO
     } else {
+      if (poResult?.reason === "already_open") {
+        setAutoPOMessage({ text: "Par updated. This item already has an open order, so no new PO was created.", tone: "info" });
+      } else if (poResult?.reason === "no_known_supplier") {
+        setAutoPOMessage({ text: "Par updated. No supplier on file for this item yet, so no PO could be created automatically — add one in Vendors.", tone: "info" });
+      } else {
+        setAutoPOMessage(null);
+      }
+      if (poResult?.reason && poResult.reason !== "not_below_par") {
+        setTimeout(() => setAutoPOMessage(null), 8000);
+      }
       setGroups((prev) =>
         prev.map((g) => ({ ...g, items: g.items.map((i) => (i.id === itemId ? { ...i, par_level: numValue } : i)) }))
       );
@@ -213,8 +224,16 @@ export default function DigestScreen() {
   return (
     <div>
       {autoPOMessage && (
-        <div style={{ margin: "16px 16px 0", background: "#E7F0FA", border: `1px solid ${accent}`, borderRadius: 8, padding: "10px 12px", fontSize: 13, color: accent }}>
-          {autoPOMessage}
+        <div style={{
+          margin: "16px 16px 0",
+          background: autoPOMessage.tone === "success" ? "#E7F0FA" : "#F1F4F8",
+          border: `1px solid ${autoPOMessage.tone === "success" ? accent : "#D6DCE5"}`,
+          borderRadius: 8,
+          padding: "10px 12px",
+          fontSize: 13,
+          color: autoPOMessage.tone === "success" ? accent : textMuted,
+        }}>
+          {autoPOMessage.text}
         </div>
       )}
       <div style={{ padding: "24px 20px 8px" }}>

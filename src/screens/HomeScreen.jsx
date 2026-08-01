@@ -113,7 +113,7 @@ export default function HomeScreen({ onNavigate }) {
   const [poSummary, setPoSummary] = useState({ total: 0, openPOs: [], partialPOs: [], fulfilledPOs: [] });
   const [showPODetail, setShowPODetail] = useState(false);
   const [expandedPOCategory, setExpandedPOCategory] = useState(null);
-  const [autoPOMessage, setAutoPOMessage] = useState("");
+  const [autoPOMessage, setAutoPOMessage] = useState(null);
 
   useEffect(() => {
     load();
@@ -241,8 +241,14 @@ export default function HomeScreen({ onNavigate }) {
     if (numValue !== null) {
       const { data: poResult } = await supabase.rpc("auto_create_po_if_needed", { p_inventory_item_id: itemId });
       if (poResult?.created) {
-        setAutoPOMessage(`${poResult.po_number} created — ordered ${poResult.quantity} ${poResult.unit} of ${poResult.item_name} from ${poResult.supplier_name}.`);
-        setTimeout(() => setAutoPOMessage(""), 6000);
+        setAutoPOMessage({ text: `${poResult.po_number} created — ordered ${poResult.quantity} ${poResult.unit} of ${poResult.item_name} from ${poResult.supplier_name}.`, tone: "success" });
+        setTimeout(() => setAutoPOMessage(null), 6000);
+      } else if (poResult?.reason === "already_open") {
+        setAutoPOMessage({ text: "Par updated. This item already has an open order, so no new PO was created.", tone: "info" });
+        setTimeout(() => setAutoPOMessage(null), 8000);
+      } else if (poResult?.reason === "no_known_supplier") {
+        setAutoPOMessage({ text: "Par updated. No supplier on file for this item yet, so no PO could be created automatically — add one in Vendors.", tone: "info" });
+        setTimeout(() => setAutoPOMessage(null), 8000);
       }
     }
     // Reload rather than patch local state - changing a par can move an item
@@ -267,8 +273,15 @@ export default function HomeScreen({ onNavigate }) {
 
       <div style={{ padding: "16px 16px 8px", display: "flex", flexDirection: "column", gap: 10 }}>
         {autoPOMessage && (
-          <div style={{ background: "#E7F0FA", border: `1px solid ${accent}`, borderRadius: 8, padding: "10px 12px", fontSize: 13, color: accent }}>
-            {autoPOMessage}
+          <div style={{
+            background: autoPOMessage.tone === "success" ? "#E7F0FA" : "#F1F4F8",
+            border: `1px solid ${autoPOMessage.tone === "success" ? accent : "#D6DCE5"}`,
+            borderRadius: 8,
+            padding: "10px 12px",
+            fontSize: 13,
+            color: autoPOMessage.tone === "success" ? accent : textMuted,
+          }}>
+            {autoPOMessage.text}
           </div>
         )}
         {!loading && timeStats.totalCount > 0 && (
