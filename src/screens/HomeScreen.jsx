@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity, ChevronDown, ChevronUp, Pencil } from "lucide-react";
+import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity, ChevronDown, ChevronUp, Pencil, Clock } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, sans, mono } from "../lib/tokens";
@@ -43,6 +43,7 @@ export default function HomeScreen({ onNavigate }) {
   const [health, setHealth] = useState({ total: 0, healthy: 0, belowPar: 0, noPar: 0, healthyItems: [], belowParItems: [], noParItems: [] });
   const [showHealthDetail, setShowHealthDetail] = useState(false);
   const [editingParId, setEditingParId] = useState(null);
+  const [timeStats, setTimeStats] = useState({ monthCount: 0, totalCount: 0 });
 
   useEffect(() => {
     load();
@@ -113,6 +114,28 @@ export default function HomeScreen({ onNavigate }) {
     const { data: risks } = await supabase.rpc("stockout_risk_items", { p_restaurant_id: RESTAURANT_ID });
     setStockoutRisks(risks || []);
 
+    // Time saved is an estimate, not a measurement - based on ~8 minutes of
+    // manual entry (reading a paper invoice, typing line items/quantities/
+    // prices into a spreadsheet or POS) avoided per invoice processed here.
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const { count: monthCount } = await supabase
+      .from("invoices")
+      .select("id", { count: "exact", head: true })
+      .eq("restaurant_id", RESTAURANT_ID)
+      .eq("status", "confirmed")
+      .gte("confirmed_at", startOfMonth.toISOString());
+
+    const { count: totalCount } = await supabase
+      .from("invoices")
+      .select("id", { count: "exact", head: true })
+      .eq("restaurant_id", RESTAURANT_ID)
+      .eq("status", "confirmed");
+
+    setTimeStats({ monthCount: monthCount || 0, totalCount: totalCount || 0 });
+
     setLoading(false);
   }
 
@@ -142,6 +165,25 @@ export default function HomeScreen({ onNavigate }) {
       </div>
 
       <div style={{ padding: "16px 16px 8px", display: "flex", flexDirection: "column", gap: 10 }}>
+        {!loading && timeStats.totalCount > 0 && (
+          <div style={{ background: "linear-gradient(135deg, #1E5B8C, #164569)", borderRadius: 10, padding: "18px 18px", color: "#FFFFFF" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, opacity: 0.85 }}>
+              <Clock size={15} />
+              <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.3 }}>TIME SAVED</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 28, fontWeight: 700, fontFamily: mono }}>
+                ~{((timeStats.totalCount * 8) / 60).toFixed(1)} hrs
+              </span>
+              <span style={{ fontSize: 13, opacity: 0.85 }}>all time</span>
+            </div>
+            <div style={{ fontSize: 12, opacity: 0.85 }}>
+              {timeStats.totalCount} invoice{timeStats.totalCount !== 1 ? "s" : ""} processed
+              {timeStats.monthCount > 0 && ` · ${timeStats.monthCount} this month`}
+            </div>
+          </div>
+        )}
+
         {!loading && allClear && (
           <div style={{ background: card, border: "1px solid #BFE3D0", borderRadius: 10, padding: "20px 18px", display: "flex", alignItems: "center", gap: 10 }}>
             <CheckCircle2 size={20} color={good} />
