@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, ChevronLeft, ChevronRight, Camera, AlertTriangle, Plus, ArrowLeft, Search, Pencil, ChevronDown, ChevronUp } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
@@ -382,6 +382,39 @@ export default function InvoicesScreen() {
 
   useEffect(() => {
     loadPendingList();
+  }, [RESTAURANT_ID]);
+
+  // Refs so the stable Realtime subscription below can always read the
+  // CURRENT view/invoice without needing to tear down and resubscribe every
+  // time they change (which would happen if they were effect dependencies).
+  const viewRef = useRef(view);
+  const invoiceRef = useRef(invoice);
+  useEffect(() => { viewRef.current = view; }, [view]);
+  useEffect(() => { invoiceRef.current = invoice; }, [invoice]);
+
+  // Live sync: refreshes whichever view is currently showing when the
+  // underlying data changes - a new invoice arriving (another device, or
+  // this one's own QR-scan/batch-upload flow finishing async), a vendor or
+  // item getting renamed/deleted, or line-item matching finishing.
+  useEffect(() => {
+    if (!RESTAURANT_ID) return;
+    const channel = supabase
+      .channel(`invoices-${RESTAURANT_ID}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "invoices", filter: `restaurant_id=eq.${RESTAURANT_ID}` }, () => {
+        if (viewRef.current === "queue") loadPendingList();
+        else if (viewRef.current === "history") loadHistory();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "invoice_line_items" }, (payload) => {
+        const currentInvoiceId = invoiceRef.current?.id;
+        if (viewRef.current === "detail" && currentInvoiceId && payload.new?.invoice_id === currentInvoiceId) {
+          loadInvoiceDetail(currentInvoiceId);
+        }
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "suppliers", filter: `restaurant_id=eq.${RESTAURANT_ID}` }, () => loadSuppliers())
+      .on("postgres_changes", { event: "*", schema: "public", table: "inventory_items", filter: `restaurant_id=eq.${RESTAURANT_ID}` }, () => loadItems())
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
   }, [RESTAURANT_ID]);
 
   const reviewItems = lineItems.filter((i) => i.needs_review);
