@@ -42,6 +42,14 @@ export default function InvoicesScreen() {
   const [showNewVendorConfirm, setShowNewVendorConfirm] = useState(false);
   const [newVendorConfirmName, setNewVendorConfirmName] = useState("");
   const [confirmingVendor, setConfirmingVendor] = useState(false);
+  const [itemsList, setItemsList] = useState([]);
+  const [showAddItem, setShowAddItem] = useState(false);
+  const [newItemFormName, setNewItemFormName] = useState("");
+  const [newItemFormUnit, setNewItemFormUnit] = useState("lb");
+  const [newItemFormPar, setNewItemFormPar] = useState("");
+  const [newItemFormSku, setNewItemFormSku] = useState("");
+  const [addingItem, setAddingItem] = useState(false);
+  const [addItemError, setAddItemError] = useState("");
   const [invoice, setInvoice] = useState(null);
   const [lineItems, setLineItems] = useState([]);
   const [pendingList, setPendingList] = useState([]);
@@ -177,6 +185,52 @@ export default function InvoicesScreen() {
     setSuppliersList(data || []);
   }
 
+  async function loadItems() {
+    if (!RESTAURANT_ID) return;
+    const { data } = await supabase
+      .from("inventory_items")
+      .select("id, name, unit, par_level, sku")
+      .eq("restaurant_id", RESTAURANT_ID)
+      .order("name", { ascending: true });
+    setItemsList(data || []);
+  }
+
+  async function addItem() {
+    if (!newItemFormName.trim()) return;
+    setAddingItem(true);
+    setAddItemError("");
+
+    const exists = itemsList.some(
+      (i) => i.name.trim().toLowerCase() === newItemFormName.trim().toLowerCase()
+    );
+    if (exists) {
+      setAddItemError("An item with this name already exists.");
+      setAddingItem(false);
+      return;
+    }
+
+    const { error } = await supabase.from("inventory_items").insert({
+      restaurant_id: RESTAURANT_ID,
+      name: newItemFormName.trim(),
+      unit: newItemFormUnit || "ea",
+      par_level: newItemFormPar ? Number(newItemFormPar) : null,
+      sku: newItemFormSku.trim() || null,
+      current_stock: 0,
+    });
+
+    if (error) {
+      setAddItemError(error.message);
+    } else {
+      setNewItemFormName("");
+      setNewItemFormUnit("lb");
+      setNewItemFormPar("");
+      setNewItemFormSku("");
+      setShowAddItem(false);
+      loadItems();
+    }
+    setAddingItem(false);
+  }
+
   async function addVendor() {
     if (!newVendorName.trim()) return;
     setAddingVendor(true);
@@ -206,6 +260,7 @@ export default function InvoicesScreen() {
       setVendorPhone("");
       setShowAddVendor(false);
       loadSuppliers();
+              loadItems();
     }
     setAddingVendor(false);
   }
@@ -238,6 +293,7 @@ export default function InvoicesScreen() {
       setInvoice((prev) => ({ ...prev, supplier_id: created.id }));
       setVendorPhone("");
       loadSuppliers();
+              loadItems();
       loadInvoiceDetail(invoice.id);
     }
     setConfirmingVendor(false);
@@ -462,6 +518,87 @@ export default function InvoicesScreen() {
           )}
         </div>
 
+        <div style={{ padding: "8px 16px 16px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <div style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", color: textMuted }}>Inventory Items</div>
+            <button
+              onClick={() => {
+                setShowAddItem((s) => !s);
+                setAddItemError("");
+              }}
+              style={{ background: "none", border: "none", color: accent, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
+            >
+              <Plus size={13} /> Add item
+            </button>
+          </div>
+
+          {showAddItem && (
+            <div style={{ background: card, border: "1px solid #E2E6ED", borderRadius: 8, padding: 12, marginBottom: 10 }}>
+              <input
+                placeholder="Item name"
+                value={newItemFormName}
+                onChange={(e) => setNewItemFormName(e.target.value)}
+                style={{ width: "100%", background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 6, padding: "8px 10px", color: textPrimary, fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
+              />
+              <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                <select
+                  value={newItemFormUnit}
+                  onChange={(e) => setNewItemFormUnit(e.target.value)}
+                  style={{ flex: 1, background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 6, padding: "8px 10px", color: textPrimary, fontSize: 13 }}
+                >
+                  {["lb", "case", "ea", "gal", "cs", "bag", "dz"].map((u) => (
+                    <option key={u} value={u}>{u}</option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  placeholder="Par level (optional)"
+                  value={newItemFormPar}
+                  onChange={(e) => setNewItemFormPar(e.target.value)}
+                  style={{ flex: 1, background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 6, padding: "8px 10px", color: textPrimary, fontSize: 13, fontFamily: mono }}
+                />
+              </div>
+              <input
+                placeholder="SKU (optional)"
+                value={newItemFormSku}
+                onChange={(e) => setNewItemFormSku(e.target.value)}
+                style={{ width: "100%", background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 6, padding: "8px 10px", color: textPrimary, fontSize: 13, marginBottom: 8, boxSizing: "border-box", fontFamily: mono }}
+              />
+              {addItemError && <div style={{ color: danger, fontSize: 12, marginBottom: 8 }}>{addItemError}</div>}
+              <button
+                onClick={addItem}
+                disabled={!newItemFormName.trim() || addingItem}
+                style={{
+                  width: "100%",
+                  background: newItemFormName.trim() ? accent : "#D6DCE5",
+                  border: "none",
+                  borderRadius: 6,
+                  padding: "9px 12px",
+                  color: "#FFFFFF",
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: newItemFormName.trim() ? "pointer" : "not-allowed",
+                }}
+              >
+                {addingItem ? "Adding…" : "Save item"}
+              </button>
+            </div>
+          )}
+
+          {itemsList.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {itemsList.map((it) => (
+                <span
+                  key={it.id}
+                  style={{ fontSize: 12, color: textMuted, background: "#F1F4F8", border: "1px solid #E2E6ED", borderRadius: 20, padding: "5px 12px" }}
+                >
+                  {it.name} ({it.unit}){it.par_level != null ? ` · par ${it.par_level}` : ""}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div style={{ padding: "0 16px 8px", fontSize: 12, letterSpacing: 1, textTransform: "uppercase", color: textMuted }}>
           Invoice history
         </div>
@@ -584,6 +721,7 @@ export default function InvoicesScreen() {
               setView("history");
               loadHistory();
               loadSuppliers();
+              loadItems();
             }}
             style={{ background: "none", border: "none", color: textMuted, fontSize: 12, cursor: "pointer", textDecoration: "underline" }}
           >
@@ -599,6 +737,7 @@ export default function InvoicesScreen() {
                 setView("history");
                 loadHistory();
                 loadSuppliers();
+              loadItems();
               }}
               style={{ marginTop: 16, background: "none", border: "1px solid #E2E6ED", borderRadius: 8, padding: "10px 16px", color: textMuted, cursor: "pointer", fontSize: 13 }}
             >
