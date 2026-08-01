@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity } from "lucide-react";
+import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity, ChevronDown, ChevronUp } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, sans, mono } from "../lib/tokens";
@@ -11,7 +11,8 @@ export default function HomeScreen({ onNavigate }) {
   const [vendorConfirmCount, setVendorConfirmCount] = useState(0);
   const [belowParCount, setBelowParCount] = useState(0);
   const [stockoutRisks, setStockoutRisks] = useState([]);
-  const [health, setHealth] = useState({ total: 0, healthy: 0, belowPar: 0, noPar: 0 });
+  const [health, setHealth] = useState({ total: 0, healthy: 0, belowPar: 0, noPar: 0, healthyItems: [], belowParItems: [], noParItems: [] });
+  const [showHealthDetail, setShowHealthDetail] = useState(false);
 
   useEffect(() => {
     load();
@@ -34,15 +35,24 @@ export default function HomeScreen({ onNavigate }) {
     // summary can also surface items that aren't being monitored at all.
     const { data: allItems } = await supabase
       .from("inventory_items")
-      .select("id, current_stock, par_level")
-      .eq("restaurant_id", RESTAURANT_ID);
+      .select("id, name, unit, current_stock, par_level")
+      .eq("restaurant_id", RESTAURANT_ID)
+      .order("name", { ascending: true });
 
     const items = allItems || [];
-    const noPar = items.filter((i) => i.par_level == null).length;
+    const noParItems = items.filter((i) => i.par_level == null);
     const tracked = items.filter((i) => i.par_level != null);
-    const belowParRaw = tracked.filter((i) => i.current_stock <= i.par_level).length;
-    const healthy = tracked.length - belowParRaw;
-    setHealth({ total: items.length, healthy, belowPar: belowParRaw, noPar });
+    const belowParItems = tracked.filter((i) => i.current_stock <= i.par_level);
+    const healthyItems = tracked.filter((i) => i.current_stock > i.par_level);
+    setHealth({
+      total: items.length,
+      healthy: healthyItems.length,
+      belowPar: belowParItems.length,
+      noPar: noParItems.length,
+      healthyItems,
+      belowParItems,
+      noParItems,
+    });
 
     // Actionable alert count excludes items already covered by an open
     // purchase order - matches the same guard logic as the Reorder digest,
@@ -154,17 +164,21 @@ export default function HomeScreen({ onNavigate }) {
 
         {!loading && health.total > 0 && (
           <div style={{ background: card, border: "1px solid #E2E6ED", borderRadius: 10, padding: "16px 18px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <button
+              onClick={() => setShowHealthDetail((s) => !s)}
+              style={{ width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}
+            >
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <Activity size={16} color={textMuted} />
                 <span style={{ fontSize: 13, fontWeight: 600, color: textPrimary }}>Inventory health</span>
+                {showHealthDetail ? <ChevronUp size={14} color={textMuted} /> : <ChevronDown size={14} color={textMuted} />}
               </div>
               {healthyPct != null && (
                 <span style={{ fontSize: 13, fontFamily: mono, color: healthyPct >= 70 ? good : healthyPct >= 40 ? accent : danger }}>
                   {healthyPct}% healthy
                 </span>
               )}
-            </div>
+            </button>
 
             {/* Segmented bar: healthy / below par / untracked */}
             <div style={{ display: "flex", width: "100%", height: 8, borderRadius: 4, overflow: "hidden", marginBottom: 10 }}>
@@ -180,6 +194,58 @@ export default function HomeScreen({ onNavigate }) {
                 <span><span style={{ color: textMuted, fontFamily: mono }}>{health.noPar}</span> not tracked (no par level set)</span>
               )}
             </div>
+
+            {showHealthDetail && (
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #E2E6ED", display: "flex", flexDirection: "column", gap: 14 }}>
+                {health.belowParItems.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: danger, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+                      Below par ({health.belowParItems.length})
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 160, overflowY: "auto" }}>
+                      {health.belowParItems.map((i) => (
+                        <div key={i.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                          <span style={{ color: textPrimary }}>{i.name}</span>
+                          <span style={{ color: danger, fontFamily: mono }}>{i.current_stock} / {i.par_level} {i.unit}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {health.noParItems.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: textMuted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+                      Not tracked ({health.noParItems.length})
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 160, overflowY: "auto" }}>
+                      {health.noParItems.map((i) => (
+                        <div key={i.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                          <span style={{ color: textPrimary }}>{i.name}</span>
+                          <span style={{ color: textMuted, fontFamily: mono }}>no par set</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {health.healthyItems.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: good, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+                      Healthy ({health.healthyItems.length})
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 160, overflowY: "auto" }}>
+                      {health.healthyItems.map((i) => (
+                        <div key={i.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                          <span style={{ color: textPrimary }}>{i.name}</span>
+                          <span style={{ color: good, fontFamily: mono }}>{i.current_stock} / {i.par_level} {i.unit}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
