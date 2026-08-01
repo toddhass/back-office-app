@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, Copy, Check, ChevronDown, ChevronUp, Send, Pencil, MessageCircle } from "lucide-react";
+import { AlertTriangle, Copy, Check, ChevronDown, ChevronUp, Send, Pencil, MessageCircle, FileCheck } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, mono } from "../lib/tokens";
@@ -23,6 +23,7 @@ export default function DigestScreen() {
   const [expectedDates, setExpectedDates] = useState({});
   const [editingParId, setEditingParId] = useState(null);
   const [sentError, setSentError] = useState({});
+  const [confirmedPOs, setConfirmedPOs] = useState({});
 
   useEffect(() => {
     load();
@@ -165,7 +166,7 @@ export default function DigestScreen() {
             status: "sent",
             expected_delivery_date: expectedDates[group.supplier] || null,
           })
-          .select("id")
+          .select("id, po_number, expected_delivery_date")
           .single();
 
         if (po) {
@@ -175,6 +176,16 @@ export default function DigestScreen() {
             quantity_ordered: suggestQty(item),
           }));
           await supabase.from("purchase_order_items").insert(poItems);
+
+          setConfirmedPOs((c) => ({
+            ...c,
+            [group.supplier]: {
+              po_number: po.po_number,
+              expected_delivery_date: po.expected_delivery_date,
+              supplier: group.supplier,
+              items: itemsToOrder.map((item) => ({ name: item.name, qty: suggestQty(item), unit: item.unit })),
+            },
+          }));
         }
       }
 
@@ -347,6 +358,29 @@ export default function DigestScreen() {
                   </div>
                   {sentError[group.supplier] && (
                     <div style={{ fontSize: 12, color: danger, marginTop: 8 }}>{sentError[group.supplier]}</div>
+                  )}
+                  {confirmedPOs[group.supplier] && (
+                    <div style={{ marginTop: 10, background: "#E7F0FA", border: `1px solid ${accent}`, borderRadius: 8, padding: 12 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                        <FileCheck size={14} color={accent} />
+                        <span style={{ fontSize: 13, fontWeight: 700, color: accent, fontFamily: mono }}>
+                          {confirmedPOs[group.supplier].po_number} created
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3, marginBottom: 8 }}>
+                        {confirmedPOs[group.supplier].items.map((item, idx) => (
+                          <div key={idx} style={{ fontSize: 12, color: textPrimary, display: "flex", justifyContent: "space-between" }}>
+                            <span>{item.name}</span>
+                            <span style={{ fontFamily: mono, color: textMuted }}>+{item.qty} {item.unit}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {confirmedPOs[group.supplier].expected_delivery_date && (
+                        <div style={{ fontSize: 11, color: textMuted }}>
+                          Expected {confirmedPOs[group.supplier].expected_delivery_date}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
