@@ -270,6 +270,20 @@ export default function InvoicesScreen() {
         { onConflict: "restaurant_id,raw_description" }
       );
 
+      // If this line item had a SKU and the matched inventory item doesn't
+      // have one recorded yet, backfill it - future invoices with this same
+      // code can then match instantly via SKU instead of fuzzy text.
+      if (item?.sku) {
+        const { data: existingItem } = await supabase
+          .from("inventory_items")
+          .select("sku")
+          .eq("id", candidateId)
+          .single();
+        if (existingItem && !existingItem.sku) {
+          await supabase.from("inventory_items").update({ sku: item.sku }).eq("id", candidateId);
+        }
+      }
+
       setLineItems((prev) =>
         prev.map((i) => (i.id === itemId ? { ...i, inventory_item_id: candidateId, needs_review: false } : i))
       );
@@ -285,6 +299,7 @@ export default function InvoicesScreen() {
         name: newItemName,
         unit: currentItem.unit || "ea",
         current_stock: currentItem.quantity || 0,
+        sku: currentItem.sku || null,
       })
       .select()
       .single();
@@ -826,6 +841,9 @@ export default function InvoicesScreen() {
         <div style={{ padding: "8px 16px" }}>
           <div style={{ background: card, border: "1px solid #E2E6ED", borderRadius: 10, padding: 18 }}>
             <div style={{ fontFamily: mono, fontSize: 15, marginBottom: 4 }}>"{currentItem.raw_description}"</div>
+            {currentItem.sku && (
+              <div style={{ fontFamily: mono, fontSize: 11, color: textMuted, marginBottom: 4 }}>SKU {currentItem.sku}</div>
+            )}
             {currentItem.shipment_note && (
               <div style={{ display: "flex", alignItems: "flex-start", gap: 6, background: "#E7F0FA", border: "1px solid #BFDCF0", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 12, color: accent }}>
                 <AlertTriangle size={13} style={{ marginTop: 1, flexShrink: 0 }} />
