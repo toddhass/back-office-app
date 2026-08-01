@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity, ChevronDown, ChevronUp, Pencil, Clock, Package, Leaf } from "lucide-react";
+import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity, ChevronDown, ChevronUp, Pencil, Clock, Package, Leaf, ChefHat } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, sans, mono } from "../lib/tokens";
@@ -105,6 +105,7 @@ export default function HomeScreen({ onNavigate }) {
   const [vendorConfirmCount, setVendorConfirmCount] = useState(0);
   const [belowParCount, setBelowParCount] = useState(0);
   const [stockoutRisks, setStockoutRisks] = useState([]);
+  const [atRiskItems, setAtRiskItems] = useState([]);
   const [health, setHealth] = useState({ total: 0, healthy: 0, belowPar: 0, noPar: 0, healthyItems: [], belowParItems: [], noParItems: [] });
   const [showHealthDetail, setShowHealthDetail] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState(null); // 'belowPar' | 'noPar' | 'healthy' | null
@@ -204,6 +205,9 @@ export default function HomeScreen({ onNavigate }) {
 
     const { data: risks } = await supabase.rpc("stockout_risk_items", { p_restaurant_id: RESTAURANT_ID });
     setStockoutRisks(risks || []);
+
+    const { data: atRisk } = await supabase.rpc("at_risk_items", { p_restaurant_id: RESTAURANT_ID });
+    setAtRiskItems(atRisk || []);
 
     // Time saved is an estimate, not a measurement - based on ~8 minutes of
     // manual entry (reading a paper invoice, typing line items/quantities/
@@ -307,7 +311,7 @@ export default function HomeScreen({ onNavigate }) {
     setVendorPickerLoading(false);
   }
 
-  const allClear = pendingCount === 0 && belowParCount === 0 && stockoutRisks.length === 0;
+  const allClear = pendingCount === 0 && belowParCount === 0 && stockoutRisks.length === 0 && atRiskItems.length === 0;
   const healthyPct = health.total - health.noPar > 0 ? Math.round((health.healthy / (health.total - health.noPar)) * 100) : null;
 
   return (
@@ -405,6 +409,27 @@ export default function HomeScreen({ onNavigate }) {
               {stockoutRisks.slice(0, 3).map((r) => (
                 <div key={r.inventory_item_id} style={{ fontSize: 12, color: textMuted, fontFamily: mono }}>
                   {r.item_name} — projected out {r.projected_stockout_date}, shipment expected {r.expected_delivery_date} ({r.days_short}d short)
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!loading && atRiskItems.length > 0 && (
+          <div
+            onClick={() => onNavigate("kitchen")}
+            style={{ width: "100%", textAlign: "left", background: "#FFF7ED", border: "1px solid #FBD9A8", borderRadius: 10, padding: "16px 18px", color: textPrimary, cursor: "pointer", animation: "bannerSlideIn 0.3s ease-out" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <ChefHat size={18} color="#B45309" />
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#B45309" }}>
+                {atRiskItems.length} item{atRiskItems.length > 1 ? "s" : ""} about to expire
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {atRiskItems.slice(0, 3).map((r) => (
+                <div key={r.inventory_item_id} style={{ fontSize: 12, color: textMuted, fontFamily: mono }}>
+                  {r.name} — {r.days_until_expiration < 0 ? `${Math.abs(r.days_until_expiration)}d overdue` : r.days_until_expiration === 0 ? "today" : `${r.days_until_expiration}d left`}
                 </div>
               ))}
             </div>
