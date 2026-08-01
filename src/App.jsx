@@ -41,25 +41,26 @@ function RestaurantSwitcher({ restaurants, restaurantId, restaurantName, onSwitc
 
 function ToastStack({ toasts, onDismiss }) {
   if (toasts.length === 0) return null;
+  const current = toasts[0]; // show one at a time, oldest first
   const toneColors = {
     success: { bg: "#E7F0FA", border: accent, text: accent },
     warning: { bg: "#FDECEC", border: "#F3B8B8", text: "#B23B3B" },
     info: { bg: "#F1F4F8", border: "#D6DCE5", text: textMuted },
   };
+  const c = toneColors[current.tone] || toneColors.info;
   return (
-    <div style={{ position: "fixed", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 2000, display: "flex", flexDirection: "column", gap: 8, width: "100%", maxWidth: 400, padding: "0 12px", pointerEvents: "none" }}>
-      {toasts.map((t) => {
-        const c = toneColors[t.tone] || toneColors.info;
-        return (
-          <div
-            key={t.id}
-            onClick={() => onDismiss(t.id)}
-            style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 8, padding: "10px 14px", fontSize: 13, color: c.text, boxShadow: "0 2px 8px rgba(0,0,0,0.1)", cursor: "pointer", pointerEvents: "auto" }}
-          >
-            {t.text}
-          </div>
-        );
-      })}
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, width: "100%", maxWidth: 360, borderTop: `4px solid ${c.text}` }}>
+        <div style={{ fontSize: 15, color: textPrimary, lineHeight: 1.5, marginBottom: 16 }}>
+          {current.text}
+        </div>
+        <button
+          onClick={() => onDismiss(current.id)}
+          style={{ width: "100%", background: c.text, border: "none", borderRadius: 8, padding: "11px", color: "#FFFFFF", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+        >
+          OK{toasts.length > 1 ? ` (${toasts.length - 1} more)` : ""}
+        </button>
+      </div>
     </div>
   );
 }

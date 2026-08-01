@@ -18,9 +18,6 @@ export function useNotifications(restaurantId) {
   const pushToast = useCallback((text, tone = "info") => {
     const id = nextId++;
     setToasts((prev) => [...prev, { id, text, tone }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 7000);
   }, []);
 
   const dismissToast = useCallback((id) => {
