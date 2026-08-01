@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut } from "lucide-react";
+import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
-import { card, textPrimary, textMuted, accent, danger, good, sans } from "../lib/tokens";
+import { card, textPrimary, textMuted, accent, danger, good, sans, mono } from "../lib/tokens";
 
 export default function HomeScreen({ onNavigate }) {
   const { restaurantId: RESTAURANT_ID, restaurantName } = useAuth();
@@ -10,6 +10,7 @@ export default function HomeScreen({ onNavigate }) {
   const [pendingCount, setPendingCount] = useState(0);
   const [vendorConfirmCount, setVendorConfirmCount] = useState(0);
   const [belowParCount, setBelowParCount] = useState(0);
+  const [stockoutRisks, setStockoutRisks] = useState([]);
 
   useEffect(() => {
     load();
@@ -38,10 +39,15 @@ export default function HomeScreen({ onNavigate }) {
       (items || []).filter((i) => i.current_stock <= i.par_level && !i.last_reorder_sent_at).length
     );
 
+    // Items on order that, at their recent usage rate, are projected to run
+    // out before the shipment is expected to arrive.
+    const { data: risks } = await supabase.rpc("stockout_risk_items", { p_restaurant_id: RESTAURANT_ID });
+    setStockoutRisks(risks || []);
+
     setLoading(false);
   }
 
-  const allClear = pendingCount === 0 && belowParCount === 0;
+  const allClear = pendingCount === 0 && belowParCount === 0 && stockoutRisks.length === 0;
 
   return (
     <div style={{ fontFamily: sans }}>
@@ -59,6 +65,27 @@ export default function HomeScreen({ onNavigate }) {
           <div style={{ background: card, border: "1px solid #BFE3D0", borderRadius: 10, padding: "20px 18px", display: "flex", alignItems: "center", gap: 10 }}>
             <CheckCircle2 size={20} color={good} />
             <div style={{ fontSize: 14, color: textPrimary }}>Nothing waiting on you right now.</div>
+          </div>
+        )}
+
+        {!loading && stockoutRisks.length > 0 && (
+          <div
+            onClick={() => onNavigate("digest")}
+            style={{ width: "100%", textAlign: "left", background: "#FDECEC", border: "1px solid #F3B8B8", borderRadius: 10, padding: "16px 18px", color: textPrimary, cursor: "pointer" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <TrendingDown size={18} color={danger} />
+              <div style={{ fontWeight: 700, fontSize: 15, color: danger }}>
+                {stockoutRisks.length} item{stockoutRisks.length > 1 ? "s" : ""} may run out before the shipment arrives
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {stockoutRisks.slice(0, 3).map((r) => (
+                <div key={r.inventory_item_id} style={{ fontSize: 12, color: textMuted, fontFamily: mono }}>
+                  {r.item_name} — projected out {r.projected_stockout_date}, shipment expected {r.expected_delivery_date} ({r.days_short}d short)
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

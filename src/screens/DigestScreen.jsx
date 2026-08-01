@@ -20,6 +20,7 @@ export default function DigestScreen() {
   const [drafts, setDrafts] = useState({});
   const [copied, setCopied] = useState(null);
   const [sent, setSent] = useState({});
+  const [expectedDates, setExpectedDates] = useState({});
   const [editingParId, setEditingParId] = useState(null);
 
   useEffect(() => {
@@ -67,6 +68,8 @@ export default function DigestScreen() {
       setGroups(groupList);
       setExpanded(Object.fromEntries(groupList.map((g) => [g.supplier, true])));
       setDrafts(Object.fromEntries(groupList.map((g) => [g.supplier, draftMessage(g.supplier, g.items)])));
+      const defaultDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      setExpectedDates(Object.fromEntries(groupList.map((g) => [g.supplier, defaultDate])));
       setLoading(false);
   }
 
@@ -100,7 +103,12 @@ export default function DigestScreen() {
       if (group.supplierId) {
         const { data: po } = await supabase
           .from("purchase_orders")
-          .insert({ restaurant_id: RESTAURANT_ID, supplier_id: group.supplierId, status: "sent" })
+          .insert({
+            restaurant_id: RESTAURANT_ID,
+            supplier_id: group.supplierId,
+            status: "sent",
+            expected_delivery_date: expectedDates[group.supplier] || null,
+          })
           .select("id")
           .single();
 
@@ -230,6 +238,16 @@ export default function DigestScreen() {
                       lineHeight: 1.5,
                     }}
                   />
+
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+                    <span style={{ fontSize: 12, color: textMuted }}>Expected delivery</span>
+                    <input
+                      type="date"
+                      value={expectedDates[group.supplier] || ""}
+                      onChange={(e) => setExpectedDates((d) => ({ ...d, [group.supplier]: e.target.value }))}
+                      style={{ background: "#F9FAFB", border: "1px solid #E2E6ED", borderRadius: 6, padding: "6px 8px", color: textPrimary, fontSize: 12, fontFamily: mono }}
+                    />
+                  </div>
 
                   <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                     <button
