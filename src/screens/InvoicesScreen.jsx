@@ -52,6 +52,14 @@ export default function InvoicesScreen() {
   const [addItemError, setAddItemError] = useState("");
   const [showVendorsList, setShowVendorsList] = useState(false);
   const [showItemsList, setShowItemsList] = useState(false);
+  const [editingEntity, setEditingEntity] = useState(null); // { type: 'supplier'|'item', id, name }
+  const [renameValue, setRenameValue] = useState("");
+  const [deleteCheck, setDeleteCheck] = useState({ checking: false, blockedReason: null });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [reopening, setReopening] = useState(false);
+  const [reopenConfirming, setReopenConfirming] = useState(false);
+  const [reopenSummary, setReopenSummary] = useState(null);
+  const [reopenError, setReopenError] = useState("");
   const [invoice, setInvoice] = useState(null);
   const [lineItems, setLineItems] = useState([]);
   const [pendingList, setPendingList] = useState([]);
@@ -233,6 +241,76 @@ export default function InvoicesScreen() {
     setAddingItem(false);
   }
 
+  async function reopenInvoice(invoiceId) {
+    setReopening(true);
+    setReopenError("");
+    const { data, error } = await supabase.rpc("reopen_invoice_for_correction", { p_invoice_id: invoiceId });
+    if (error) {
+      setReopenError(error.message);
+    } else {
+      setReopenSummary(data);
+    }
+    setReopenConfirming(false);
+    setReopening(false);
+  }
+  async function openEditPanel(type, id, name) {
+    setEditingEntity({ type, id, name });
+    setRenameValue(name);
+    setDeleteCheck({ checking: true, blockedReason: null });
+
+    // Only allow deleting an entity with zero usage history - renaming is
+    // always safe, but deleting something with real invoice/PO history
+    // would orphan or corrupt that history. This mirrors how real
+    // accounting software treats vendors/items with transaction history.
+    if (type === "supplier") {
+      const [{ count: invCount }, { count: poCount }] = await Promise.all([
+        supabase.from("invoices").select("id", { count: "exact", head: true }).eq("supplier_id", id),
+        supabase.from("purchase_orders").select("id", { count: "exact", head: true }).eq("supplier_id", id),
+      ]);
+      const total = (invCount || 0) + (poCount || 0);
+      setDeleteCheck({
+        checking: false,
+        blockedReason: total > 0 ? `Used in ${invCount || 0} invoice${invCount === 1 ? "" : "s"} and ${poCount || 0} purchase order${poCount === 1 ? "" : "s"} — rename instead of delete.` : null,
+      });
+    } else {
+      const [{ count: liCount }, { count: poiCount }] = await Promise.all([
+        supabase.from("invoice_line_items").select("id", { count: "exact", head: true }).eq("inventory_item_id", id),
+        supabase.from("purchase_order_items").select("id", { count: "exact", head: true }).eq("inventory_item_id", id),
+      ]);
+      const total = (liCount || 0) + (poiCount || 0);
+      setDeleteCheck({
+        checking: false,
+        blockedReason: total > 0 ? `Used in ${liCount || 0} invoice line item${liCount === 1 ? "" : "s"} and ${poiCount || 0} purchase order line${poiCount === 1 ? "" : "s"} — rename instead of delete.` : null,
+      });
+    }
+  }
+
+  async function saveRename() {
+    if (!editingEntity || !renameValue.trim()) return;
+    setSavingEdit(true);
+    const table = editingEntity.type === "supplier" ? "suppliers" : "inventory_items";
+    const { error } = await supabase.from(table).update({ name: renameValue.trim() }).eq("id", editingEntity.id);
+    if (!error) {
+      setEditingEntity(null);
+      if (editingEntity.type === "supplier") loadSuppliers();
+      else loadItems();
+    }
+    setSavingEdit(false);
+  }
+
+  async function confirmDelete() {
+    if (!editingEntity || deleteCheck.blockedReason) return;
+    setSavingEdit(true);
+    const table = editingEntity.type === "supplier" ? "suppliers" : "inventory_items";
+    const { error } = await supabase.from(table).delete().eq("id", editingEntity.id);
+    if (!error) {
+      setEditingEntity(null);
+      if (editingEntity.type === "supplier") loadSuppliers();
+      else loadItems();
+    }
+    setSavingEdit(false);
+  }
+
   async function addVendor() {
     if (!newVendorName.trim()) return;
     setAddingVendor(true);
@@ -319,6 +397,7 @@ export default function InvoicesScreen() {
       p_supplier_id: invoice?.supplier_id || null,
       p_inventory_item_id: candidateId,
       p_invoice_qty: item?.quantity || 0,
+      p_invoice_line_item_id: itemId,
     });
 
     const { error } = await supabase
@@ -382,6 +461,7 @@ export default function InvoicesScreen() {
         p_supplier_id: invoice?.supplier_id || null,
         p_inventory_item_id: created.id,
         p_invoice_qty: currentItem.quantity || 0,
+        p_invoice_line_item_id: currentItem.id,
       });
 
       await supabase
@@ -525,22 +605,28 @@ export default function InvoicesScreen() {
               {suppliersList.map((s) => {
                 const active = historySearch.trim().toLowerCase() === s.name.trim().toLowerCase();
                 return (
-                  <button
-                    key={s.id}
-                    onClick={() => setHistorySearch(active ? "" : s.name)}
-                    style={{
-                      fontSize: 12,
-                      color: active ? "#FFFFFF" : textMuted,
-                      background: active ? accent : "#F1F4F8",
-                      border: active ? `1px solid ${accent}` : "1px solid #E2E6ED",
-                      borderRadius: 20,
-                      padding: "5px 12px",
-                      fontWeight: active ? 700 : 400,
-                      cursor: "pointer",
-                    }}
-                  >
-                    {s.name}{s.phone ? ` · ${s.phone}` : ""}
-                  </button>
+                  <div key={s.id} style={{ display: "flex", alignItems: "center", background: active ? accent : "#F1F4F8", border: active ? `1px solid ${accent}` : "1px solid #E2E6ED", borderRadius: 20, overflow: "hidden" }}>
+                    <button
+                      onClick={() => setHistorySearch(active ? "" : s.name)}
+                      style={{
+                        fontSize: 12,
+                        color: active ? "#FFFFFF" : textMuted,
+                        background: "none",
+                        border: "none",
+                        padding: "5px 4px 5px 12px",
+                        fontWeight: active ? 700 : 400,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {s.name}{s.phone ? ` · ${s.phone}` : ""}
+                    </button>
+                    <button
+                      onClick={() => openEditPanel("supplier", s.id, s.name)}
+                      style={{ background: "none", border: "none", padding: "5px 10px 5px 4px", cursor: "pointer", color: active ? "#FFFFFF" : textMuted }}
+                    >
+                      <Pencil size={11} />
+                    </button>
+                  </div>
                 );
               })}
             </div>
@@ -623,12 +709,17 @@ export default function InvoicesScreen() {
           {showItemsList && itemsList.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 220, overflowY: "auto" }}>
               {itemsList.map((it) => (
-                <span
-                  key={it.id}
-                  style={{ fontSize: 12, color: textMuted, background: "#F1F4F8", border: "1px solid #E2E6ED", borderRadius: 20, padding: "5px 12px" }}
-                >
-                  {it.name} ({it.unit}){it.par_level != null ? ` · par ${it.par_level}` : ""}
-                </span>
+                <div key={it.id} style={{ display: "flex", alignItems: "center", background: "#F1F4F8", border: "1px solid #E2E6ED", borderRadius: 20, overflow: "hidden" }}>
+                  <span style={{ fontSize: 12, color: textMuted, padding: "5px 4px 5px 12px" }}>
+                    {it.name} ({it.unit}){it.par_level != null ? ` · par ${it.par_level}` : ""}
+                  </span>
+                  <button
+                    onClick={() => openEditPanel("item", it.id, it.name)}
+                    style={{ background: "none", border: "none", padding: "5px 10px 5px 4px", cursor: "pointer", color: textMuted }}
+                  >
+                    <Pencil size={11} />
+                  </button>
+                </div>
               ))}
             </div>
           )}
@@ -695,6 +786,50 @@ export default function InvoicesScreen() {
             </button>
           ))}
         </div>
+
+        {editingEntity && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+            <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, width: "100%", maxWidth: 340 }}>
+              <div style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", color: textMuted, marginBottom: 4 }}>
+                {editingEntity.type === "supplier" ? "Edit vendor" : "Edit item"}
+              </div>
+              <input
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                style={{ width: "100%", background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 6, padding: "10px 12px", color: textPrimary, fontSize: 14, marginTop: 8, marginBottom: 14, boxSizing: "border-box" }}
+              />
+
+              <button
+                onClick={saveRename}
+                disabled={savingEdit || !renameValue.trim()}
+                style={{ width: "100%", background: accent, border: "none", borderRadius: 8, padding: "11px", color: "#FFFFFF", fontWeight: 700, fontSize: 13, cursor: "pointer", marginBottom: 8 }}
+              >
+                {savingEdit ? "Saving…" : "Save name"}
+              </button>
+
+              {deleteCheck.checking ? (
+                <div style={{ fontSize: 12, color: textMuted, textAlign: "center", padding: 8 }}>Checking usage…</div>
+              ) : deleteCheck.blockedReason ? (
+                <div style={{ fontSize: 11, color: textMuted, textAlign: "center", padding: "4px 4px 0" }}>{deleteCheck.blockedReason}</div>
+              ) : (
+                <button
+                  onClick={confirmDelete}
+                  disabled={savingEdit}
+                  style={{ width: "100%", background: "none", border: `1px solid ${danger}`, borderRadius: 8, padding: "11px", color: danger, fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+                >
+                  Delete — unused, safe to remove
+                </button>
+              )}
+
+              <button
+                onClick={() => setEditingEntity(null)}
+                style={{ width: "100%", background: "none", border: "none", padding: "10px", color: textMuted, fontSize: 13, cursor: "pointer", marginTop: 4 }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -735,6 +870,63 @@ export default function InvoicesScreen() {
             Received by {histInv.confirmed_by_email}
             {histInv.confirmed_at &&
               ` on ${new Date(histInv.confirmed_at).toLocaleDateString()} at ${new Date(histInv.confirmed_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`}
+          </div>
+        )}
+
+        {!reopenSummary && (
+          <div style={{ padding: "0 16px 20px" }}>
+            {!reopenConfirming ? (
+              <button
+                onClick={() => setReopenConfirming(true)}
+                style={{ width: "100%", background: "none", border: "1px solid #E2E6ED", borderRadius: 8, padding: "11px", color: textMuted, fontSize: 13, cursor: "pointer" }}
+              >
+                Reopen for correction
+              </button>
+            ) : (
+              <div style={{ background: "#FDECEC", border: "1px solid #F3B8B8", borderRadius: 8, padding: 14 }}>
+                <div style={{ fontSize: 12, color: textPrimary, marginBottom: 10 }}>
+                  This will reverse the stock and any purchase-order credit this invoice added, and put it back in your review queue to fix. This can't be undone.
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={() => setReopenConfirming(false)}
+                    style={{ flex: 1, background: "none", border: "1px solid #E2E6ED", borderRadius: 8, padding: "10px", color: textMuted, fontSize: 13, cursor: "pointer" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => reopenInvoice(histInv.id)}
+                    disabled={reopening}
+                    style={{ flex: 1, background: danger, border: "none", borderRadius: 8, padding: "10px", color: "#FFFFFF", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                  >
+                    {reopening ? "Reopening…" : "Yes, reopen it"}
+                  </button>
+                </div>
+                {reopenError && <div style={{ color: danger, fontSize: 12, marginTop: 8 }}>{reopenError}</div>}
+              </div>
+            )}
+          </div>
+        )}
+
+        {reopenSummary && (
+          <div style={{ margin: "0 16px 20px", background: "#E7F0FA", border: `1px solid ${accent}`, borderRadius: 8, padding: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: accent, marginBottom: 8 }}>Reopened for correction</div>
+            {(reopenSummary.reversed_items || []).map((r, idx) => (
+              <div key={idx} style={{ fontSize: 12, color: textPrimary, marginBottom: 2 }}>
+                Reversed {r.quantity_reversed} of {r.name}{r.clamped ? " (stock had already dropped further, so we reversed as much as was actually there)" : ""}
+              </div>
+            ))}
+            {(reopenSummary.po_adjustments || []).map((p, idx) => (
+              <div key={idx} style={{ fontSize: 12, color: textMuted, marginBottom: 2 }}>
+                {p.po_number}: released {p.quantity_reversed} {p.item_name} back to open
+              </div>
+            ))}
+            <button
+              onClick={() => { setReopenSummary(null); setView("history"); loadHistory(); }}
+              style={{ width: "100%", marginTop: 10, background: accent, border: "none", borderRadius: 8, padding: "10px", color: "#FFFFFF", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+            >
+              Done — find it in the review queue
+            </button>
           </div>
         )}
       </div>

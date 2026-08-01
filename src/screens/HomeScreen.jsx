@@ -113,6 +113,7 @@ export default function HomeScreen({ onNavigate }) {
   const [poSummary, setPoSummary] = useState({ total: 0, openPOs: [], partialPOs: [], fulfilledPOs: [] });
   const [showPODetail, setShowPODetail] = useState(false);
   const [expandedPOCategory, setExpandedPOCategory] = useState(null);
+  const [autoPOMessage, setAutoPOMessage] = useState("");
 
   useEffect(() => {
     load();
@@ -236,6 +237,14 @@ export default function HomeScreen({ onNavigate }) {
     if (value !== "" && isNaN(numValue)) return;
     await supabase.from("inventory_items").update({ par_level: numValue }).eq("id", itemId);
     setEditingParId(null);
+
+    if (numValue !== null) {
+      const { data: poResult } = await supabase.rpc("auto_create_po_if_needed", { p_inventory_item_id: itemId });
+      if (poResult?.created) {
+        setAutoPOMessage(`${poResult.po_number} created — ordered ${poResult.quantity} ${poResult.unit} of ${poResult.item_name} from ${poResult.supplier_name}.`);
+        setTimeout(() => setAutoPOMessage(""), 6000);
+      }
+    }
     // Reload rather than patch local state - changing a par can move an item
     // between categories (e.g. setting one for the first time on a
     // 'not tracked' item, or pushing a 'healthy' item into 'below par').
@@ -257,6 +266,11 @@ export default function HomeScreen({ onNavigate }) {
       </div>
 
       <div style={{ padding: "16px 16px 8px", display: "flex", flexDirection: "column", gap: 10 }}>
+        {autoPOMessage && (
+          <div style={{ background: "#E7F0FA", border: `1px solid ${accent}`, borderRadius: 8, padding: "10px 12px", fontSize: 13, color: accent }}>
+            {autoPOMessage}
+          </div>
+        )}
         {!loading && timeStats.totalCount > 0 && (
           <div style={{ background: "linear-gradient(135deg, #1E5B8C, #164569)", borderRadius: 10, padding: "18px 18px", color: "#FFFFFF" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, opacity: 0.85 }}>

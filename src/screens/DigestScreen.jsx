@@ -23,6 +23,7 @@ export default function DigestScreen() {
   const [expectedDates, setExpectedDates] = useState({});
   const [editingParId, setEditingParId] = useState(null);
   const [sentError, setSentError] = useState({});
+  const [autoPOMessage, setAutoPOMessage] = useState("");
   const [confirmedPOs, setConfirmedPOs] = useState({});
 
   useEffect(() => {
@@ -109,10 +110,18 @@ export default function DigestScreen() {
     const numValue = parseFloat(value);
     if (isNaN(numValue)) return;
     await supabase.from("inventory_items").update({ par_level: numValue }).eq("id", itemId);
-    setGroups((prev) =>
-      prev.map((g) => ({ ...g, items: g.items.map((i) => (i.id === itemId ? { ...i, par_level: numValue } : i)) }))
-    );
     setEditingParId(null);
+
+    const { data: poResult } = await supabase.rpc("auto_create_po_if_needed", { p_inventory_item_id: itemId });
+    if (poResult?.created) {
+      setAutoPOMessage(`${poResult.po_number} created — ordered ${poResult.quantity} ${poResult.unit} of ${poResult.item_name} from ${poResult.supplier_name}.`);
+      setTimeout(() => setAutoPOMessage(""), 6000);
+      load(); // refresh - the item may now be covered by an open PO
+    } else {
+      setGroups((prev) =>
+        prev.map((g) => ({ ...g, items: g.items.map((i) => (i.id === itemId ? { ...i, par_level: numValue } : i)) }))
+      );
+    }
   }
   async function markSent(group) {
     // Re-verify against open purchase orders right before creating a new one -
@@ -203,6 +212,11 @@ export default function DigestScreen() {
 
   return (
     <div>
+      {autoPOMessage && (
+        <div style={{ margin: "16px 16px 0", background: "#E7F0FA", border: `1px solid ${accent}`, borderRadius: 8, padding: "10px 12px", fontSize: 13, color: accent }}>
+          {autoPOMessage}
+        </div>
+      )}
       <div style={{ padding: "24px 20px 8px" }}>
         <div style={{ fontSize: 12, letterSpacing: 1.5, textTransform: "uppercase", color: textMuted, marginBottom: 4 }}>
           Daily Digest
