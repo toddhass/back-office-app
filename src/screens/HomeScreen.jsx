@@ -33,6 +33,31 @@ function ItemHealthRow({ item, valueColor, editingParId, setEditingParId, update
   );
 }
 
+function HealthCategorySection({ categoryKey, label, color, items, expandedCategory, setExpandedCategory, editingParId, setEditingParId, updateParLevel }) {
+  if (items.length === 0) return null;
+  const isOpen = expandedCategory === categoryKey;
+  return (
+    <div>
+      <button
+        onClick={() => setExpandedCategory(isOpen ? null : categoryKey)}
+        style={{ width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isOpen ? 6 : 0 }}
+      >
+        <span style={{ fontSize: 11, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: 0.5 }}>
+          {label} ({items.length})
+        </span>
+        {isOpen ? <ChevronUp size={12} color={color} /> : <ChevronDown size={12} color={color} />}
+      </button>
+      {isOpen && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 180, minHeight: 0, overflowY: "auto" }}>
+          {items.map((i) => (
+            <ItemHealthRow key={i.id} item={i} valueColor={color} editingParId={editingParId} setEditingParId={setEditingParId} updateParLevel={updateParLevel} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function HomeScreen({ onNavigate }) {
   const { restaurantId: RESTAURANT_ID, restaurantName } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -42,6 +67,7 @@ export default function HomeScreen({ onNavigate }) {
   const [stockoutRisks, setStockoutRisks] = useState([]);
   const [health, setHealth] = useState({ total: 0, healthy: 0, belowPar: 0, noPar: 0, healthyItems: [], belowParItems: [], noParItems: [] });
   const [showHealthDetail, setShowHealthDetail] = useState(false);
+  const [expandedCategory, setExpandedCategory] = useState(null); // 'belowPar' | 'noPar' | 'healthy' | null
   const [editingParId, setEditingParId] = useState(null);
   const [timeStats, setTimeStats] = useState({ monthCount: 0, totalCount: 0 });
 
@@ -248,7 +274,10 @@ export default function HomeScreen({ onNavigate }) {
         {!loading && health.total > 0 && (
           <div style={{ background: card, border: "1px solid #E2E6ED", borderRadius: 10, padding: "16px 18px" }}>
             <button
-              onClick={() => setShowHealthDetail((s) => !s)}
+              onClick={() => {
+                setShowHealthDetail((s) => !s);
+                setExpandedCategory(null);
+              }}
               style={{ width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -279,45 +308,40 @@ export default function HomeScreen({ onNavigate }) {
             </div>
 
             {showHealthDetail && (
-              <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #E2E6ED", display: "flex", flexDirection: "column", gap: 14 }}>
-                {health.belowParItems.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: danger, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
-                      Below par ({health.belowParItems.length})
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 160, overflowY: "auto" }}>
-                      {health.belowParItems.map((i) => (
-                        <ItemHealthRow key={i.id} item={i} valueColor={danger} editingParId={editingParId} setEditingParId={setEditingParId} updateParLevel={updateParLevel} />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {health.noParItems.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: textMuted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
-                      Not tracked ({health.noParItems.length})
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 160, overflowY: "auto" }}>
-                      {health.noParItems.map((i) => (
-                        <ItemHealthRow key={i.id} item={i} valueColor={textMuted} editingParId={editingParId} setEditingParId={setEditingParId} updateParLevel={updateParLevel} />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {health.healthyItems.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: good, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
-                      Healthy ({health.healthyItems.length})
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 160, overflowY: "auto" }}>
-                      {health.healthyItems.map((i) => (
-                        <ItemHealthRow key={i.id} item={i} valueColor={good} editingParId={editingParId} setEditingParId={setEditingParId} updateParLevel={updateParLevel} />
-                      ))}
-                    </div>
-                  </div>
-                )}
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #E2E6ED", display: "flex", flexDirection: "column", gap: 12 }}>
+                <HealthCategorySection
+                  categoryKey="belowPar"
+                  label="Below par"
+                  color={danger}
+                  items={health.belowParItems}
+                  expandedCategory={expandedCategory}
+                  setExpandedCategory={setExpandedCategory}
+                  editingParId={editingParId}
+                  setEditingParId={setEditingParId}
+                  updateParLevel={updateParLevel}
+                />
+                <HealthCategorySection
+                  categoryKey="noPar"
+                  label="Not tracked"
+                  color={textMuted}
+                  items={health.noParItems}
+                  expandedCategory={expandedCategory}
+                  setExpandedCategory={setExpandedCategory}
+                  editingParId={editingParId}
+                  setEditingParId={setEditingParId}
+                  updateParLevel={updateParLevel}
+                />
+                <HealthCategorySection
+                  categoryKey="healthy"
+                  label="Healthy"
+                  color={good}
+                  items={health.healthyItems}
+                  expandedCategory={expandedCategory}
+                  setExpandedCategory={setExpandedCategory}
+                  editingParId={editingParId}
+                  setEditingParId={setEditingParId}
+                  updateParLevel={updateParLevel}
+                />
               </div>
             )}
           </div>
