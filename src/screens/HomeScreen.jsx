@@ -1,8 +1,37 @@
 import { useEffect, useState } from "react";
-import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity, ChevronDown, ChevronUp } from "lucide-react";
+import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity, ChevronDown, ChevronUp, Pencil } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, sans, mono } from "../lib/tokens";
+
+function ItemHealthRow({ item, valueColor, editingParId, setEditingParId, updateParLevel }) {
+  const isEditing = editingParId === item.id;
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, gap: 8 }}>
+      <span style={{ color: textPrimary, flex: 1 }}>{item.name}</span>
+      {isEditing ? (
+        <input
+          type="number"
+          defaultValue={item.par_level ?? ""}
+          autoFocus
+          placeholder="Par"
+          onBlur={(e) => updateParLevel(item.id, e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && updateParLevel(item.id, e.target.value)}
+          style={{ width: 56, background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 4, padding: "2px 6px", color: textPrimary, fontSize: 11, fontFamily: mono }}
+        />
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ color: valueColor, fontFamily: mono }}>
+            {item.par_level != null ? `${item.current_stock} / ${item.par_level} ${item.unit}` : "no par set"}
+          </span>
+          <button onClick={() => setEditingParId(item.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", padding: 1 }}>
+            <Pencil size={10} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function HomeScreen({ onNavigate }) {
   const { restaurantId: RESTAURANT_ID, restaurantName } = useAuth();
@@ -13,6 +42,7 @@ export default function HomeScreen({ onNavigate }) {
   const [stockoutRisks, setStockoutRisks] = useState([]);
   const [health, setHealth] = useState({ total: 0, healthy: 0, belowPar: 0, noPar: 0, healthyItems: [], belowParItems: [], noParItems: [] });
   const [showHealthDetail, setShowHealthDetail] = useState(false);
+  const [editingParId, setEditingParId] = useState(null);
 
   useEffect(() => {
     load();
@@ -84,6 +114,17 @@ export default function HomeScreen({ onNavigate }) {
     setStockoutRisks(risks || []);
 
     setLoading(false);
+  }
+
+  async function updateParLevel(itemId, value) {
+    const numValue = value === "" ? null : parseFloat(value);
+    if (value !== "" && isNaN(numValue)) return;
+    await supabase.from("inventory_items").update({ par_level: numValue }).eq("id", itemId);
+    setEditingParId(null);
+    // Reload rather than patch local state - changing a par can move an item
+    // between categories (e.g. setting one for the first time on a
+    // 'not tracked' item, or pushing a 'healthy' item into 'below par').
+    load();
   }
 
   const allClear = pendingCount === 0 && belowParCount === 0 && stockoutRisks.length === 0;
@@ -204,10 +245,7 @@ export default function HomeScreen({ onNavigate }) {
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 160, overflowY: "auto" }}>
                       {health.belowParItems.map((i) => (
-                        <div key={i.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-                          <span style={{ color: textPrimary }}>{i.name}</span>
-                          <span style={{ color: danger, fontFamily: mono }}>{i.current_stock} / {i.par_level} {i.unit}</span>
-                        </div>
+                        <ItemHealthRow key={i.id} item={i} valueColor={danger} editingParId={editingParId} setEditingParId={setEditingParId} updateParLevel={updateParLevel} />
                       ))}
                     </div>
                   </div>
@@ -220,10 +258,7 @@ export default function HomeScreen({ onNavigate }) {
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 160, overflowY: "auto" }}>
                       {health.noParItems.map((i) => (
-                        <div key={i.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-                          <span style={{ color: textPrimary }}>{i.name}</span>
-                          <span style={{ color: textMuted, fontFamily: mono }}>no par set</span>
-                        </div>
+                        <ItemHealthRow key={i.id} item={i} valueColor={textMuted} editingParId={editingParId} setEditingParId={setEditingParId} updateParLevel={updateParLevel} />
                       ))}
                     </div>
                   </div>
@@ -236,10 +271,7 @@ export default function HomeScreen({ onNavigate }) {
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 160, overflowY: "auto" }}>
                       {health.healthyItems.map((i) => (
-                        <div key={i.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-                          <span style={{ color: textPrimary }}>{i.name}</span>
-                          <span style={{ color: good, fontFamily: mono }}>{i.current_stock} / {i.par_level} {i.unit}</span>
-                        </div>
+                        <ItemHealthRow key={i.id} item={i} valueColor={good} editingParId={editingParId} setEditingParId={setEditingParId} updateParLevel={updateParLevel} />
                       ))}
                     </div>
                   </div>
