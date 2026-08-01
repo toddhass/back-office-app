@@ -22,6 +22,7 @@ export default function DigestScreen() {
   const [sent, setSent] = useState({});
   const [expectedDates, setExpectedDates] = useState({});
   const [editingParId, setEditingParId] = useState(null);
+  const [sentError, setSentError] = useState({});
 
   useEffect(() => {
     load();
@@ -40,11 +41,33 @@ export default function DigestScreen() {
         .eq("restaurant_id", RESTAURANT_ID)
         .not("par_level", "is", null);
 
-      // Below par AND not already flagged as sent since it last dipped below par.
-      // A restock (handled in InvoicesScreen's postToInventory) clears
-      // last_reorder_sent_at, so this re-surfaces the item if it dips again.
+      // Items already covered by an OPEN purchase order (sent/partial, not yet
+      // fully received) are excluded here regardless of last_reorder_sent_at.
+      // This is the authoritative guard: last_reorder_sent_at gets cleared on
+      // ANY restock (even a partial one that doesn't fully close the order),
+      // so relying on it alone would let a manager re-order something that's
+      // still outstanding - real risk of double-ordering.
+      const { data: openPOs } = await supabase
+        .from("purchase_orders")
+        .select("id")
+        .eq("restaurant_id", RESTAURANT_ID)
+        .in("status", ["sent", "partial"]);
+
+      let openItemIds = new Set();
+      if (openPOs && openPOs.length > 0) {
+        const { data: openPOItems } = await supabase
+          .from("purchase_order_items")
+          .select("inventory_item_id, quantity_ordered, quantity_received")
+          .in("purchase_order_id", openPOs.map((p) => p.id));
+        openItemIds = new Set(
+          (openPOItems || [])
+            .filter((i) => Number(i.quantity_received) < Number(i.quantity_ordered))
+            .map((i) => i.inventory_item_id)
+        );
+      }
+
       const belowPar = (items || []).filter(
-        (i) => i.current_stock <= i.par_level && !i.last_reorder_sent_at
+        (i) => i.current_stock <= i.par_level && !openItemIds.has(i.id)
       );
 
       const grouped = {};
@@ -91,7 +114,40 @@ export default function DigestScreen() {
     setEditingParId(null);
   }
   async function markSent(group) {
-    const itemIds = group.items.map((i) => i.id);
+    // Re-verify against open purchase orders right before creating a new one -
+    // defense in depth in case this group's data went stale between the last
+    // load() and this tap (e.g. another device/tab already sent an order for
+    // one of these items in the meantime).
+    let itemsToOrder = group.items;
+    if (group.supplierId) {
+      const { data: existingOpenPOs } = await supabase
+        .from("purchase_orders")
+        .select("id")
+        .eq("supplier_id", group.supplierId)
+        .in("status", ["sent", "partial"]);
+
+      if (existingOpenPOs && existingOpenPOs.length > 0) {
+        const { data: existingOpenItems } = await supabase
+          .from("purchase_order_items")
+          .select("inventory_item_id, quantity_ordered, quantity_received")
+          .in("purchase_order_id", existingOpenPOs.map((p) => p.id));
+
+        const alreadyOpenIds = new Set(
+          (existingOpenItems || [])
+            .filter((i) => Number(i.quantity_received) < Number(i.quantity_ordered))
+            .map((i) => i.inventory_item_id)
+        );
+
+        itemsToOrder = group.items.filter((item) => !alreadyOpenIds.has(item.id));
+      }
+    }
+
+    if (itemsToOrder.length === 0) {
+      setSentError((e) => ({ ...e, [group.supplier]: "These items already have an open order with this supplier." }));
+      return;
+    }
+
+    const itemIds = itemsToOrder.map((i) => i.id);
     const { error } = await supabase
       .from("inventory_items")
       .update({ last_reorder_sent_at: new Date().toISOString() })
@@ -113,7 +169,7 @@ export default function DigestScreen() {
           .single();
 
         if (po) {
-          const poItems = group.items.map((item) => ({
+          const poItems = itemsToOrder.map((item) => ({
             purchase_order_id: po.id,
             inventory_item_id: item.id,
             quantity_ordered: suggestQty(item),
@@ -289,6 +345,9 @@ export default function DigestScreen() {
                       {isSent ? "Sent" : "Mark sent"}
                     </button>
                   </div>
+                  {sentError[group.supplier] && (
+                    <div style={{ fontSize: 12, color: danger, marginTop: 8 }}>{sentError[group.supplier]}</div>
+                  )}
                 </div>
               )}
             </div>
