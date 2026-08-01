@@ -1,5 +1,6 @@
-import { useRef, useState } from "react";
-import { Camera, ImageIcon, Loader2, CheckCircle2, XCircle, RotateCcw, Copy } from "lucide-react";
+import { useRef, useState, useEffect } from "react";
+import { Camera, ImageIcon, Loader2, CheckCircle2, XCircle, RotateCcw, Copy, QrCode, X } from "lucide-react";
+import jsQR from "jsqr";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, mono } from "../lib/tokens";
@@ -15,6 +16,12 @@ export default function CaptureScreen({ onDone }) {
   const [batchCurrent, setBatchCurrent] = useState(0);
   const [batchFileName, setBatchFileName] = useState("");
   const fileInputRef = useRef(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState("");
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+  const scanIntervalRef = useRef(null);
 
   async function handleFileSelect(e) {
     const file = e.target.files[0];
@@ -32,6 +39,10 @@ export default function CaptureScreen({ onDone }) {
     }
 
     setStatus("processing");
+    await processStoragePath(path);
+  }
+
+  async function processStoragePath(path) {
     const { data, error: fnError } = await supabase.functions.invoke("extract-invoice", {
       body: { restaurant_id: RESTAURANT_ID, storage_path: path },
     });
@@ -76,6 +87,77 @@ export default function CaptureScreen({ onDone }) {
     });
     setStatus("done");
   }
+
+  async function startQRScan() {
+    setScanError("");
+    setScanning(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+
+      scanIntervalRef.current = setInterval(() => {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        if (!video || !canvas || video.readyState !== video.HAVE_ENOUGH_DATA) return;
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+        if (code && code.data) {
+          handleQRDetected(code.data);
+        }
+      }, 300);
+    } catch (err) {
+      setScanError("Couldn't access the camera. Check that this site has camera permission.");
+      setScanning(false);
+    }
+  }
+
+  function stopQRScan() {
+    if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+    if (streamRef.current) streamRef.current.getTracks().forEach((track) => track.stop());
+    scanIntervalRef.current = null;
+    streamRef.current = null;
+    setScanning(false);
+  }
+
+  async function handleQRDetected(url) {
+    stopQRScan();
+    setFileName(url);
+    setStatus("uploading");
+
+    const { data, error: fetchError } = await supabase.functions.invoke("fetch-remote-invoice", {
+      body: { restaurant_id: RESTAURANT_ID, source_url: url },
+    });
+
+    if (fetchError) {
+      let detail = fetchError.message;
+      try {
+        if (fetchError.context && typeof fetchError.context.json === "function") {
+          const body = await fetchError.context.json();
+          detail = body?.error || detail;
+        }
+      } catch (_) {}
+      setErrorMsg(detail);
+      setStatus("error");
+      return;
+    }
+
+    setStatus("processing");
+    await processStoragePath(data.storage_path);
+  }
+
+  useEffect(() => {
+    return () => stopQRScan();
+  }, []);
 
   async function extractSingleFile(file) {
     const path = `${RESTAURANT_ID}/${Date.now()}-${file.name}`;
@@ -152,6 +234,23 @@ export default function CaptureScreen({ onDone }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "calc(100vh - 76px)" }}>
+      {scanning && (
+        <div style={{ position: "fixed", inset: 0, background: "#000000", zIndex: 1000, display: "flex", flexDirection: "column" }}>
+          <video ref={videoRef} playsInline muted style={{ flex: 1, width: "100%", objectFit: "cover" }} />
+          <canvas ref={canvasRef} style={{ display: "none" }} />
+          <div style={{ position: "absolute", top: 40, left: 0, right: 0, textAlign: "center", color: "#FFFFFF", fontSize: 14, padding: "0 24px" }}>
+            Point the camera at the QR code on the invoice
+          </div>
+          <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 220, height: 220, border: "3px solid #FFFFFF", borderRadius: 16, opacity: 0.8 }} />
+          <button
+            onClick={stopQRScan}
+            style={{ position: "absolute", top: 40, right: 20, background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+          >
+            <X size={18} color="#FFFFFF" />
+          </button>
+        </div>
+      )}
+
       <div style={{ padding: "24px 20px 8px" }}>
         <div style={{ fontSize: 12, letterSpacing: 1.5, textTransform: "uppercase", color: textMuted, marginBottom: 4 }}>
           New Invoice
@@ -213,6 +312,27 @@ export default function CaptureScreen({ onDone }) {
               Choose from library or PDF (multiple OK)
               <input type="file" accept="image/*,application/pdf" multiple onChange={handleBatchFileSelect} style={{ display: "none" }} />
             </label>
+
+            <button
+              onClick={startQRScan}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                background: "none",
+                border: "1px solid #E2E6ED",
+                borderRadius: 10,
+                padding: "14px",
+                cursor: "pointer",
+                color: textMuted,
+                fontSize: 13,
+              }}
+            >
+              <QrCode size={15} />
+              Scan QR code on invoice
+            </button>
+            {scanError && <div style={{ color: danger, fontSize: 12, textAlign: "center" }}>{scanError}</div>}
           </div>
         )}
 
