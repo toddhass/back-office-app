@@ -49,6 +49,12 @@ export default function LoginScreen() {
   async function handleSignUp(e) {
     e.preventDefault();
     setError("");
+
+    if (joinMethod === "new" && !restaurantName.trim()) {
+      setError("Restaurant name can't be blank.");
+      return;
+    }
+
     setLoading(true);
     try {
 
