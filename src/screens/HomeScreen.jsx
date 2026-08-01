@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity, ChevronDown, ChevronUp, Pencil, Clock, Package } from "lucide-react";
+import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity, ChevronDown, ChevronUp, Pencil, Clock, Package, Leaf } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, sans, mono } from "../lib/tokens";
@@ -110,6 +110,7 @@ export default function HomeScreen({ onNavigate }) {
   const [expandedCategory, setExpandedCategory] = useState(null); // 'belowPar' | 'noPar' | 'healthy' | null
   const [editingParId, setEditingParId] = useState(null);
   const [timeStats, setTimeStats] = useState({ monthCount: 0, totalCount: 0 });
+  const [wasteStats, setWasteStats] = useState({ count: 0, value: 0 });
   const [poSummary, setPoSummary] = useState({ total: 0, openPOs: [], partialPOs: [], fulfilledPOs: [] });
   const [showPODetail, setShowPODetail] = useState(false);
   const [expandedPOCategory, setExpandedPOCategory] = useState(null);
@@ -225,6 +226,18 @@ export default function HomeScreen({ onNavigate }) {
       .eq("status", "confirmed");
 
     setTimeStats({ monthCount: monthCount || 0, totalCount: totalCount || 0 });
+
+    // Waste saved is a real, logged number - only counts items a chef
+    // actually marked used via the Kitchen at-risk view, priced at that
+    // item's last known unit price. Not an estimate like time saved.
+    const { data: wasteLog } = await supabase
+      .from("waste_saved_log")
+      .select("quantity, estimated_value")
+      .eq("restaurant_id", RESTAURANT_ID);
+
+    const wasteCount = (wasteLog || []).length;
+    const wasteValue = (wasteLog || []).reduce((sum, w) => sum + (Number(w.estimated_value) || 0), 0);
+    setWasteStats({ count: wasteCount, value: wasteValue });
 
     // Purchase order summary - grouped by fulfillment status, with item
     // counts per PO for a quick "what's in it" glance.
@@ -359,6 +372,14 @@ export default function HomeScreen({ onNavigate }) {
               {timeStats.totalCount} invoice{timeStats.totalCount !== 1 ? "s" : ""} processed
               {timeStats.monthCount > 0 && ` · ${timeStats.monthCount} this month`}
             </div>
+            {wasteStats.count > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.2)" }}>
+                <Leaf size={13} />
+                <span style={{ fontSize: 12, opacity: 0.9 }}>
+                  ~${wasteStats.value.toFixed(2)} saved from waste ({wasteStats.count} item{wasteStats.count !== 1 ? "s" : ""} used before expiring)
+                </span>
+              </div>
+            )}
           </div>
         )}
 

@@ -48,12 +48,14 @@ export default function InvoicesScreen() {
   const [newItemFormUnit, setNewItemFormUnit] = useState("lb");
   const [newItemFormPar, setNewItemFormPar] = useState("");
   const [newItemFormSku, setNewItemFormSku] = useState("");
+  const [newItemFormShelfLife, setNewItemFormShelfLife] = useState("");
   const [addingItem, setAddingItem] = useState(false);
   const [addItemError, setAddItemError] = useState("");
   const [showVendorsList, setShowVendorsList] = useState(false);
   const [showItemsList, setShowItemsList] = useState(false);
   const [editingEntity, setEditingEntity] = useState(null); // { type: 'supplier'|'item', id, name }
   const [renameValue, setRenameValue] = useState("");
+  const [editShelfLife, setEditShelfLife] = useState("");
   const [deleteCheck, setDeleteCheck] = useState({ checking: false, blockedReason: null });
   const [savingEdit, setSavingEdit] = useState(false);
   const [reopening, setReopening] = useState(false);
@@ -225,6 +227,7 @@ export default function InvoicesScreen() {
       unit: newItemFormUnit || "ea",
       par_level: newItemFormPar ? Number(newItemFormPar) : null,
       sku: newItemFormSku.trim() || null,
+      shelf_life_days: newItemFormShelfLife ? Number(newItemFormShelfLife) : null,
       current_stock: 0,
     });
 
@@ -235,6 +238,7 @@ export default function InvoicesScreen() {
       setNewItemFormUnit("lb");
       setNewItemFormPar("");
       setNewItemFormSku("");
+      setNewItemFormShelfLife("");
       setShowAddItem(false);
       loadItems();
     }
@@ -257,6 +261,11 @@ export default function InvoicesScreen() {
     setEditingEntity({ type, id, name });
     setRenameValue(name);
     setDeleteCheck({ checking: true, blockedReason: null });
+
+    if (type === "item") {
+      const { data: itemRow } = await supabase.from("inventory_items").select("shelf_life_days").eq("id", id).single();
+      setEditShelfLife(itemRow?.shelf_life_days != null ? String(itemRow.shelf_life_days) : "");
+    }
 
     // Only allow deleting an entity with zero usage history - renaming is
     // always safe, but deleting something with real invoice/PO history
@@ -289,7 +298,11 @@ export default function InvoicesScreen() {
     if (!editingEntity || !renameValue.trim()) return;
     setSavingEdit(true);
     const table = editingEntity.type === "supplier" ? "suppliers" : "inventory_items";
-    const { error } = await supabase.from(table).update({ name: renameValue.trim() }).eq("id", editingEntity.id);
+    const updatePayload = { name: renameValue.trim() };
+    if (editingEntity.type === "item") {
+      updatePayload.shelf_life_days = editShelfLife ? Number(editShelfLife) : null;
+    }
+    const { error } = await supabase.from(table).update(updatePayload).eq("id", editingEntity.id);
     if (!error) {
       setEditingEntity(null);
       if (editingEntity.type === "supplier") loadSuppliers();
@@ -718,6 +731,13 @@ export default function InvoicesScreen() {
                 onChange={(e) => setNewItemFormSku(e.target.value)}
                 style={{ width: "100%", background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 6, padding: "8px 10px", color: textPrimary, fontSize: 13, marginBottom: 8, boxSizing: "border-box", fontFamily: mono }}
               />
+              <input
+                type="number"
+                placeholder="Shelf life in days (optional)"
+                value={newItemFormShelfLife}
+                onChange={(e) => setNewItemFormShelfLife(e.target.value)}
+                style={{ width: "100%", background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 6, padding: "8px 10px", color: textPrimary, fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
+              />
               {addItemError && <div style={{ color: danger, fontSize: 12, marginBottom: 8 }}>{addItemError}</div>}
               <button
                 onClick={addItem}
@@ -829,8 +849,18 @@ export default function InvoicesScreen() {
               <input
                 value={renameValue}
                 onChange={(e) => setRenameValue(e.target.value)}
-                style={{ width: "100%", background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 6, padding: "10px 12px", color: textPrimary, fontSize: 14, marginTop: 8, marginBottom: 14, boxSizing: "border-box" }}
+                style={{ width: "100%", background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 6, padding: "10px 12px", color: textPrimary, fontSize: 14, marginTop: 8, marginBottom: editingEntity.type === "item" ? 8 : 14, boxSizing: "border-box" }}
               />
+
+              {editingEntity.type === "item" && (
+                <input
+                  type="number"
+                  placeholder="Shelf life in days (optional)"
+                  value={editShelfLife}
+                  onChange={(e) => setEditShelfLife(e.target.value)}
+                  style={{ width: "100%", background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 6, padding: "10px 12px", color: textPrimary, fontSize: 14, marginBottom: 14, boxSizing: "border-box" }}
+                />
+              )}
 
               <button
                 onClick={saveRename}

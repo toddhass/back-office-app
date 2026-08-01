@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Camera, Receipt, ClipboardList, LogOut, Home, ChevronDown } from "lucide-react";
+import { Camera, Receipt, ClipboardList, LogOut, Home, ChevronDown, ChefHat } from "lucide-react";
 import HomeScreen from "./screens/HomeScreen";
 import CaptureScreen from "./screens/CaptureScreen";
 import InvoicesScreen from "./screens/InvoicesScreen";
 import DigestScreen from "./screens/DigestScreen";
+import KitchenScreen from "./screens/KitchenScreen";
 import LoginScreen from "./screens/LoginScreen";
 import OnboardingScreen from "./screens/OnboardingScreen";
 import { useAuth } from "./lib/AuthContext";
@@ -104,12 +105,14 @@ export default function App() {
     { key: "capture", label: "Capture", icon: Camera },
     { key: "invoices", label: "Invoices", icon: Receipt },
     { key: "digest", label: "Reorder", icon: ClipboardList },
+    { key: "kitchen", label: "Kitchen", icon: ChefHat },
   ];
 
   const activeScreen =
     tab === "home" ? <HomeScreen onNavigate={setTab} /> :
     tab === "capture" ? <CaptureScreen onDone={() => setTab("invoices")} /> :
     tab === "invoices" ? <InvoicesScreen /> :
+    tab === "kitchen" ? <KitchenScreen /> :
     <DigestScreen />;
 
   if (isDesktop) {
