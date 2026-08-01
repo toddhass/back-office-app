@@ -311,14 +311,23 @@ export default function InvoicesScreen() {
   const currentItem = reviewItems[cardIndex];
 
   async function selectCandidate(itemId, candidateId) {
+    const item = lineItems.find((i) => i.id === itemId);
+
+    // Same open-PO short-shipment check the automatic matcher runs -
+    // a manually confirmed match deserves the same protection.
+    const { data: shortNote } = await supabase.rpc("check_short_shipment", {
+      p_supplier_id: invoice?.supplier_id || null,
+      p_inventory_item_id: candidateId,
+      p_invoice_qty: item?.quantity || 0,
+    });
+
     const { error } = await supabase
       .from("invoice_line_items")
-      .update({ inventory_item_id: candidateId, needs_review: false })
+      .update({ inventory_item_id: candidateId, needs_review: !!shortNote, shipment_note: shortNote || null })
       .eq("id", itemId);
 
     if (!error) {
       // Also record this as a learned mapping for next time
-      const item = lineItems.find((i) => i.id === itemId);
       await supabase.from("item_mappings").upsert(
         {
           restaurant_id: RESTAURANT_ID,
@@ -343,7 +352,7 @@ export default function InvoicesScreen() {
       }
 
       setLineItems((prev) =>
-        prev.map((i) => (i.id === itemId ? { ...i, inventory_item_id: candidateId, needs_review: false } : i))
+        prev.map((i) => (i.id === itemId ? { ...i, inventory_item_id: candidateId, needs_review: !!shortNote, shipment_note: shortNote || null } : i))
       );
     }
   }
@@ -363,9 +372,21 @@ export default function InvoicesScreen() {
       .single();
 
     if (!error && created) {
+      // A brand-new item can still be short if it happens to match an
+      // inventory_item_id already referenced by an open PO - rare (a PO
+      // would have to reference an item that didn't exist until just now
+      // isn't possible), so this is really just for consistency/symmetry
+      // with selectCandidate; in practice this will almost always be null
+      // for a newly created item since no PO could reference it yet.
+      const { data: shortNote } = await supabase.rpc("check_short_shipment", {
+        p_supplier_id: invoice?.supplier_id || null,
+        p_inventory_item_id: created.id,
+        p_invoice_qty: currentItem.quantity || 0,
+      });
+
       await supabase
         .from("invoice_line_items")
-        .update({ inventory_item_id: created.id, needs_review: false })
+        .update({ inventory_item_id: created.id, needs_review: !!shortNote, shipment_note: shortNote || null })
         .eq("id", currentItem.id);
 
       await supabase.from("item_mappings").upsert(
@@ -378,7 +399,7 @@ export default function InvoicesScreen() {
       );
 
       setLineItems((prev) =>
-        prev.map((i) => (i.id === currentItem.id ? { ...i, inventory_item_id: created.id, needs_review: false } : i))
+        prev.map((i) => (i.id === currentItem.id ? { ...i, inventory_item_id: created.id, needs_review: !!shortNote, shipment_note: shortNote || null } : i))
       );
     }
     setNewItemName("");
