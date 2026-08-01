@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity, ChevronDown, ChevronUp, Pencil, Clock } from "lucide-react";
+import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity, ChevronDown, ChevronUp, Pencil, Clock, Package } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, sans, mono } from "../lib/tokens";
@@ -58,6 +58,46 @@ function HealthCategorySection({ categoryKey, label, color, items, expandedCateg
   );
 }
 
+function PORow({ po }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}>
+      <div>
+        <span style={{ color: textPrimary, fontFamily: mono, fontWeight: 600 }}>{po.po_number}</span>
+        <span style={{ color: textMuted }}> · {po.supplier}</span>
+      </div>
+      <div style={{ color: textMuted, fontSize: 11 }}>
+        {po.itemCount} item{po.itemCount !== 1 ? "s" : ""}
+        {po.expected_delivery_date && ` · ${po.expected_delivery_date}`}
+      </div>
+    </div>
+  );
+}
+
+function POCategorySection({ categoryKey, label, color, items, expandedCategory, setExpandedCategory }) {
+  if (items.length === 0) return null;
+  const isOpen = expandedCategory === categoryKey;
+  return (
+    <div>
+      <button
+        onClick={() => setExpandedCategory(isOpen ? null : categoryKey)}
+        style={{ width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isOpen ? 6 : 0 }}
+      >
+        <span style={{ fontSize: 11, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: 0.5 }}>
+          {label} ({items.length})
+        </span>
+        {isOpen ? <ChevronUp size={12} color={color} /> : <ChevronDown size={12} color={color} />}
+      </button>
+      {isOpen && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 180, minHeight: 0, overflowY: "auto" }}>
+          {items.map((po) => (
+            <PORow key={po.id} po={po} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function HomeScreen({ onNavigate }) {
   const { restaurantId: RESTAURANT_ID, restaurantName } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -70,6 +110,9 @@ export default function HomeScreen({ onNavigate }) {
   const [expandedCategory, setExpandedCategory] = useState(null); // 'belowPar' | 'noPar' | 'healthy' | null
   const [editingParId, setEditingParId] = useState(null);
   const [timeStats, setTimeStats] = useState({ monthCount: 0, totalCount: 0 });
+  const [poSummary, setPoSummary] = useState({ total: 0, openPOs: [], partialPOs: [], fulfilledPOs: [] });
+  const [showPODetail, setShowPODetail] = useState(false);
+  const [expandedPOCategory, setExpandedPOCategory] = useState(null);
 
   useEffect(() => {
     load();
@@ -161,6 +204,29 @@ export default function HomeScreen({ onNavigate }) {
       .eq("status", "confirmed");
 
     setTimeStats({ monthCount: monthCount || 0, totalCount: totalCount || 0 });
+
+    // Purchase order summary - grouped by fulfillment status, with item
+    // counts per PO for a quick "what's in it" glance.
+    const { data: pos } = await supabase
+      .from("purchase_orders")
+      .select("id, po_number, status, expected_delivery_date, created_at, suppliers(name), purchase_order_items(id)")
+      .eq("restaurant_id", RESTAURANT_ID)
+      .order("created_at", { ascending: false });
+
+    const allPOs = (pos || []).map((p) => ({
+      id: p.id,
+      po_number: p.po_number,
+      supplier: p.suppliers?.name || "Unknown",
+      expected_delivery_date: p.expected_delivery_date,
+      itemCount: p.purchase_order_items?.length || 0,
+    }));
+
+    setPoSummary({
+      total: allPOs.length,
+      openPOs: (pos || []).filter((p) => p.status === "sent").map((p) => allPOs.find((a) => a.id === p.id)),
+      partialPOs: (pos || []).filter((p) => p.status === "partial").map((p) => allPOs.find((a) => a.id === p.id)),
+      fulfilledPOs: (pos || []).filter((p) => p.status === "fulfilled").map((p) => allPOs.find((a) => a.id === p.id)),
+    });
 
     setLoading(false);
   }
@@ -342,6 +408,46 @@ export default function HomeScreen({ onNavigate }) {
                   setEditingParId={setEditingParId}
                   updateParLevel={updateParLevel}
                 />
+              </div>
+            )}
+          </div>
+        )}
+
+        {!loading && poSummary.total > 0 && (
+          <div style={{ background: card, border: "1px solid #E2E6ED", borderRadius: 10, padding: "16px 18px" }}>
+            <button
+              onClick={() => {
+                setShowPODetail((s) => !s);
+                setExpandedPOCategory(null);
+              }}
+              style={{ width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Package size={16} color={textMuted} />
+                <span style={{ fontSize: 13, fontWeight: 600, color: textPrimary }}>Purchase orders</span>
+                {showPODetail ? <ChevronUp size={14} color={textMuted} /> : <ChevronDown size={14} color={textMuted} />}
+              </div>
+              <span style={{ fontSize: 13, fontFamily: mono, color: textMuted }}>{poSummary.total} total</span>
+            </button>
+
+            {/* Segmented bar: open / partial / fulfilled */}
+            <div style={{ display: "flex", width: "100%", height: 8, borderRadius: 4, overflow: "hidden", marginBottom: 10 }}>
+              {poSummary.openPOs.length > 0 && <div style={{ flex: poSummary.openPOs.length, background: accent }} />}
+              {poSummary.partialPOs.length > 0 && <div style={{ flex: poSummary.partialPOs.length, background: "#D97706" }} />}
+              {poSummary.fulfilledPOs.length > 0 && <div style={{ flex: poSummary.fulfilledPOs.length, background: good }} />}
+            </div>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, fontSize: 12, color: textMuted }}>
+              <span><span style={{ color: accent, fontFamily: mono }}>{poSummary.openPOs.length}</span> open</span>
+              <span><span style={{ color: "#D97706", fontFamily: mono }}>{poSummary.partialPOs.length}</span> partial</span>
+              <span><span style={{ color: good, fontFamily: mono }}>{poSummary.fulfilledPOs.length}</span> fulfilled</span>
+            </div>
+
+            {showPODetail && (
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #E2E6ED", display: "flex", flexDirection: "column", gap: 12 }}>
+                <POCategorySection categoryKey="open" label="Open" color={accent} items={poSummary.openPOs} expandedCategory={expandedPOCategory} setExpandedCategory={setExpandedPOCategory} />
+                <POCategorySection categoryKey="partial" label="Partial" color="#D97706" items={poSummary.partialPOs} expandedCategory={expandedPOCategory} setExpandedCategory={setExpandedPOCategory} />
+                <POCategorySection categoryKey="fulfilled" label="Fulfilled" color={good} items={poSummary.fulfilledPOs} expandedCategory={expandedPOCategory} setExpandedCategory={setExpandedPOCategory} />
               </div>
             )}
           </div>
