@@ -49,8 +49,8 @@ function ToastStack({ toasts, onDismiss }) {
   };
   const c = toneColors[current.tone] || toneColors.info;
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, width: "100%", maxWidth: 360, borderTop: `4px solid ${c.text}` }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, animation: "backdropFadeIn 0.15s ease-out" }}>
+      <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, width: "100%", maxWidth: 360, borderTop: `4px solid ${c.text}`, animation: "modalPopIn 0.25s ease-out" }}>
         <div style={{ fontSize: 15, color: textPrimary, lineHeight: 1.5, marginBottom: 16 }}>
           {current.text}
         </div>

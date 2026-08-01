@@ -253,8 +253,8 @@ export default function DigestScreen() {
   return (
     <div>
       {autoPOModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, width: "100%", maxWidth: 360 }}>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, animation: "backdropFadeIn 0.15s ease-out" }}>
+          <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, width: "100%", maxWidth: 360, animation: "modalPopIn 0.25s ease-out" }}>
             {autoPOModal.tone === "success" && <FileCheck size={22} color={accent} style={{ marginBottom: 8 }} />}
             <div style={{ fontSize: 14, color: textPrimary, lineHeight: 1.5, marginBottom: autoPOModal.tone === "pick-vendor" ? 14 : 16 }}>
               {autoPOModal.text}
@@ -444,7 +444,7 @@ export default function DigestScreen() {
                     <div style={{ fontSize: 12, color: danger, marginTop: 8 }}>{sentError[group.supplier]}</div>
                   )}
                   {confirmedPOs[group.supplier] && (
-                    <div style={{ marginTop: 10, background: "#E7F0FA", border: `1px solid ${accent}`, borderRadius: 8, padding: 12 }}>
+                    <div style={{ marginTop: 10, background: "#E7F0FA", border: `1px solid ${accent}`, borderRadius: 8, padding: 12, animation: "bannerSlideIn 0.25s ease-out" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
                         <FileCheck size={14} color={accent} />
                         <span style={{ fontSize: 13, fontWeight: 700, color: accent, fontFamily: mono }}>

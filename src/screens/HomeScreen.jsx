@@ -300,8 +300,8 @@ export default function HomeScreen({ onNavigate }) {
   return (
     <div style={{ fontFamily: sans }}>
       {autoPOModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, width: "100%", maxWidth: 360 }}>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, animation: "backdropFadeIn 0.15s ease-out" }}>
+          <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, width: "100%", maxWidth: 360, animation: "modalPopIn 0.25s ease-out" }}>
             <div style={{ fontSize: 14, color: textPrimary, lineHeight: 1.5, marginBottom: autoPOModal.tone === "pick-vendor" ? 14 : 16 }}>
               {autoPOModal.text}
             </div>
@@ -372,7 +372,7 @@ export default function HomeScreen({ onNavigate }) {
         {!loading && stockoutRisks.length > 0 && (
           <div
             onClick={() => onNavigate("digest")}
-            style={{ width: "100%", textAlign: "left", background: "#FDECEC", border: "1px solid #F3B8B8", borderRadius: 10, padding: "16px 18px", color: textPrimary, cursor: "pointer" }}
+            style={{ width: "100%", textAlign: "left", background: "#FDECEC", border: "1px solid #F3B8B8", borderRadius: 10, padding: "16px 18px", color: textPrimary, cursor: "pointer", animation: "bannerSlideIn 0.3s ease-out" }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
               <TrendingDown size={18} color={danger} />

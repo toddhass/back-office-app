@@ -821,8 +821,8 @@ export default function InvoicesScreen() {
         </div>
 
         {editingEntity && (
-          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-            <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, width: "100%", maxWidth: 340 }}>
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, animation: "backdropFadeIn 0.15s ease-out" }}>
+            <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, width: "100%", maxWidth: 340, animation: "modalPopIn 0.25s ease-out" }}>
               <div style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", color: textMuted, marginBottom: 4 }}>
                 {editingEntity.type === "supplier" ? "Edit vendor" : "Edit item"}
               </div>
@@ -942,7 +942,7 @@ export default function InvoicesScreen() {
         )}
 
         {reopenSummary && (
-          <div style={{ margin: "0 16px 20px", background: "#E7F0FA", border: `1px solid ${accent}`, borderRadius: 8, padding: 14 }}>
+          <div style={{ margin: "0 16px 20px", background: "#E7F0FA", border: `1px solid ${accent}`, borderRadius: 8, padding: 14, animation: "bannerSlideIn 0.25s ease-out" }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: accent, marginBottom: 8 }}>Reopened for correction</div>
             {(reopenSummary.reversed_items || []).map((r, idx) => (
               <div key={idx} style={{ fontSize: 12, color: textPrimary, marginBottom: 2 }}>
@@ -1244,7 +1244,7 @@ export default function InvoicesScreen() {
               <div style={{ fontFamily: mono, fontSize: 11, color: textMuted, marginBottom: 4 }}>SKU {currentItem.sku}</div>
             )}
             {currentItem.shipment_note && (
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 6, background: "#E7F0FA", border: "1px solid #BFDCF0", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 12, color: accent }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 6, background: "#E7F0FA", border: "1px solid #BFDCF0", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 12, color: accent, animation: "bannerSlideIn 0.25s ease-out" }}>
                 <AlertTriangle size={13} style={{ marginTop: 1, flexShrink: 0 }} />
                 <span>{currentItem.shipment_note}</span>
               </div>

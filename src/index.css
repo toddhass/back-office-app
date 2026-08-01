@@ -1,2 +1,23 @@
 @tailwind components;
 @tailwind utilities;
+
+/* Shared motion, used across every modal/confirmation popup in the app -
+   backdrop fades in, the card itself pops in with a slight overshoot so it
+   reads as "something just happened" rather than silently appearing. */
+@keyframes backdropFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalPopIn {
+  0% { opacity: 0; transform: scale(0.92) translateY(6px); }
+  60% { opacity: 1; transform: scale(1.02) translateY(0); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* For inline confirmation banners that appear in the page flow (not a
+   modal) - e.g. "PO-1042 created", short-shipment flags. */
+@keyframes bannerSlideIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
