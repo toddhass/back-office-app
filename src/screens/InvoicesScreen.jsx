@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, Camera, AlertTriangle, Plus, ArrowLeft, Search, Pencil } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Camera, AlertTriangle, Plus, ArrowLeft, Search, Pencil, ChevronDown, ChevronUp } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { bg, card, textPrimary, textMuted, accent, danger, good, mono } from "../lib/tokens";
@@ -50,6 +50,8 @@ export default function InvoicesScreen() {
   const [newItemFormSku, setNewItemFormSku] = useState("");
   const [addingItem, setAddingItem] = useState(false);
   const [addItemError, setAddItemError] = useState("");
+  const [showVendorsList, setShowVendorsList] = useState(false);
+  const [showItemsList, setShowItemsList] = useState(false);
   const [invoice, setInvoice] = useState(null);
   const [lineItems, setLineItems] = useState([]);
   const [pendingList, setPendingList] = useState([]);
@@ -444,11 +446,17 @@ export default function InvoicesScreen() {
 
         <div style={{ padding: "8px 16px 16px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <div style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", color: textMuted }}>Vendors</div>
+            <button
+              onClick={() => setShowVendorsList((s) => !s)}
+              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 12, letterSpacing: 1, textTransform: "uppercase", color: textMuted }}
+            >
+              Vendors ({suppliersList.length}) {showVendorsList ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            </button>
             <button
               onClick={() => {
                 setShowAddVendor((s) => !s);
                 setAddVendorError("");
+                setShowVendorsList(true);
               }}
               style={{ background: "none", border: "none", color: accent, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
             >
@@ -491,8 +499,8 @@ export default function InvoicesScreen() {
             </div>
           )}
 
-          {suppliersList.length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {showVendorsList && suppliersList.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 220, overflowY: "auto" }}>
               {suppliersList.map((s) => {
                 const active = historySearch.trim().toLowerCase() === s.name.trim().toLowerCase();
                 return (
@@ -520,11 +528,17 @@ export default function InvoicesScreen() {
 
         <div style={{ padding: "8px 16px 16px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <div style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", color: textMuted }}>Inventory Items</div>
+            <button
+              onClick={() => setShowItemsList((s) => !s)}
+              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 12, letterSpacing: 1, textTransform: "uppercase", color: textMuted }}
+            >
+              Inventory Items ({itemsList.length}) {showItemsList ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            </button>
             <button
               onClick={() => {
                 setShowAddItem((s) => !s);
                 setAddItemError("");
+                setShowItemsList(true);
               }}
               style={{ background: "none", border: "none", color: accent, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
             >
@@ -585,8 +599,8 @@ export default function InvoicesScreen() {
             </div>
           )}
 
-          {itemsList.length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {showItemsList && itemsList.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 220, overflowY: "auto" }}>
               {itemsList.map((it) => (
                 <span
                   key={it.id}
