@@ -5,13 +5,14 @@ import CaptureScreen from "./screens/CaptureScreen";
 import InvoicesScreen from "./screens/InvoicesScreen";
 import DigestScreen from "./screens/DigestScreen";
 import LoginScreen from "./screens/LoginScreen";
+import OnboardingScreen from "./screens/OnboardingScreen";
 import { useAuth } from "./lib/AuthContext";
 import { supabase } from "./lib/supabaseClient";
 import { useIsDesktop } from "./lib/useIsDesktop";
 import { bg, sans, textMuted, accent, card, textPrimary, border } from "./lib/tokens";
 
 export default function App() {
-  const { session, restaurantId, restaurantName, loading } = useAuth();
+  const { session, restaurantId, restaurantName, onboardingCompleted, loading } = useAuth();
   const [tab, setTab] = useState("home");
   const isDesktop = useIsDesktop();
 
@@ -32,6 +33,10 @@ export default function App() {
         </button>
       </div>
     );
+  }
+
+  if (!onboardingCompleted) {
+    return <OnboardingScreen />;
   }
 
   const tabs = [
