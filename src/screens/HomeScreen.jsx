@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown } from "lucide-react";
+import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, sans, mono } from "../lib/tokens";
@@ -11,6 +11,7 @@ export default function HomeScreen({ onNavigate }) {
   const [vendorConfirmCount, setVendorConfirmCount] = useState(0);
   const [belowParCount, setBelowParCount] = useState(0);
   const [stockoutRisks, setStockoutRisks] = useState([]);
+  const [health, setHealth] = useState({ total: 0, healthy: 0, belowPar: 0, noPar: 0 });
 
   useEffect(() => {
     load();
@@ -29,18 +30,46 @@ export default function HomeScreen({ onNavigate }) {
     setPendingCount((invoices || []).length);
     setVendorConfirmCount((invoices || []).filter((i) => !i.supplier_id).length);
 
-    const { data: items } = await supabase
+    // Fetch every item (not just ones with a par level) so the health
+    // summary can also surface items that aren't being monitored at all.
+    const { data: allItems } = await supabase
       .from("inventory_items")
-      .select("current_stock, par_level, last_reorder_sent_at")
+      .select("id, current_stock, par_level")
+      .eq("restaurant_id", RESTAURANT_ID);
+
+    const items = allItems || [];
+    const noPar = items.filter((i) => i.par_level == null).length;
+    const tracked = items.filter((i) => i.par_level != null);
+    const belowParRaw = tracked.filter((i) => i.current_stock <= i.par_level).length;
+    const healthy = tracked.length - belowParRaw;
+    setHealth({ total: items.length, healthy, belowPar: belowParRaw, noPar });
+
+    // Actionable alert count excludes items already covered by an open
+    // purchase order - matches the same guard logic as the Reorder digest,
+    // so this number only reflects items that actually need a NEW order.
+    const { data: openPOs } = await supabase
+      .from("purchase_orders")
+      .select("id")
       .eq("restaurant_id", RESTAURANT_ID)
-      .not("par_level", "is", null);
+      .in("status", ["sent", "partial"]);
+
+    let openItemIds = new Set();
+    if (openPOs && openPOs.length > 0) {
+      const { data: openPOItems } = await supabase
+        .from("purchase_order_items")
+        .select("inventory_item_id, quantity_ordered, quantity_received")
+        .in("purchase_order_id", openPOs.map((p) => p.id));
+      openItemIds = new Set(
+        (openPOItems || [])
+          .filter((i) => Number(i.quantity_received) < Number(i.quantity_ordered))
+          .map((i) => i.inventory_item_id)
+      );
+    }
 
     setBelowParCount(
-      (items || []).filter((i) => i.current_stock <= i.par_level && !i.last_reorder_sent_at).length
+      tracked.filter((i) => i.current_stock <= i.par_level && !openItemIds.has(i.id)).length
     );
 
-    // Items on order that, at their recent usage rate, are projected to run
-    // out before the shipment is expected to arrive.
     const { data: risks } = await supabase.rpc("stockout_risk_items", { p_restaurant_id: RESTAURANT_ID });
     setStockoutRisks(risks || []);
 
@@ -48,6 +77,7 @@ export default function HomeScreen({ onNavigate }) {
   }
 
   const allClear = pendingCount === 0 && belowParCount === 0 && stockoutRisks.length === 0;
+  const healthyPct = health.total - health.noPar > 0 ? Math.round((health.healthy / (health.total - health.noPar)) * 100) : null;
 
   return (
     <div style={{ fontFamily: sans }}>
@@ -120,6 +150,37 @@ export default function HomeScreen({ onNavigate }) {
             </div>
             <AlertTriangle size={14} color={accent} />
           </button>
+        )}
+
+        {!loading && health.total > 0 && (
+          <div style={{ background: card, border: "1px solid #E2E6ED", borderRadius: 10, padding: "16px 18px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Activity size={16} color={textMuted} />
+                <span style={{ fontSize: 13, fontWeight: 600, color: textPrimary }}>Inventory health</span>
+              </div>
+              {healthyPct != null && (
+                <span style={{ fontSize: 13, fontFamily: mono, color: healthyPct >= 70 ? good : healthyPct >= 40 ? accent : danger }}>
+                  {healthyPct}% healthy
+                </span>
+              )}
+            </div>
+
+            {/* Segmented bar: healthy / below par / untracked */}
+            <div style={{ display: "flex", width: "100%", height: 8, borderRadius: 4, overflow: "hidden", marginBottom: 10 }}>
+              {health.healthy > 0 && <div style={{ flex: health.healthy, background: good }} />}
+              {health.belowPar > 0 && <div style={{ flex: health.belowPar, background: danger }} />}
+              {health.noPar > 0 && <div style={{ flex: health.noPar, background: "#D6DCE5" }} />}
+            </div>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, fontSize: 12, color: textMuted }}>
+              <span><span style={{ color: good, fontFamily: mono }}>{health.healthy}</span> healthy</span>
+              <span><span style={{ color: danger, fontFamily: mono }}>{health.belowPar}</span> below par</span>
+              {health.noPar > 0 && (
+                <span><span style={{ color: textMuted, fontFamily: mono }}>{health.noPar}</span> not tracked (no par level set)</span>
+              )}
+            </div>
+          </div>
         )}
 
         <button
