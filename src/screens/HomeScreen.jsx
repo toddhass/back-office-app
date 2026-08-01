@@ -113,7 +113,9 @@ export default function HomeScreen({ onNavigate }) {
   const [poSummary, setPoSummary] = useState({ total: 0, openPOs: [], partialPOs: [], fulfilledPOs: [] });
   const [showPODetail, setShowPODetail] = useState(false);
   const [expandedPOCategory, setExpandedPOCategory] = useState(null);
-  const [autoPOMessage, setAutoPOMessage] = useState(null);
+  const [autoPOModal, setAutoPOModal] = useState(null);
+  const [vendorPickerList, setVendorPickerList] = useState([]);
+  const [vendorPickerLoading, setVendorPickerLoading] = useState(false);
 
   useEffect(() => {
     load();
@@ -241,14 +243,15 @@ export default function HomeScreen({ onNavigate }) {
     if (numValue !== null) {
       const { data: poResult } = await supabase.rpc("auto_create_po_if_needed", { p_inventory_item_id: itemId });
       if (poResult?.created) {
-        setAutoPOMessage({ text: `${poResult.po_number} created — ordered ${poResult.quantity} ${poResult.unit} of ${poResult.item_name} from ${poResult.supplier_name}.`, tone: "success" });
-        setTimeout(() => setAutoPOMessage(null), 6000);
+        setAutoPOModal({ tone: "success", text: `${poResult.po_number} created — ordered ${poResult.quantity} ${poResult.unit} of ${poResult.item_name} from ${poResult.supplier_name}.` });
       } else if (poResult?.reason === "already_open") {
-        setAutoPOMessage({ text: "Par updated. This item already has an open order, so no new PO was created.", tone: "info" });
-        setTimeout(() => setAutoPOMessage(null), 8000);
+        setAutoPOModal({ tone: "info", text: "Par updated. This item already has an open order, so no new PO was created." });
       } else if (poResult?.reason === "no_known_supplier") {
-        setAutoPOMessage({ text: "Par updated. No supplier on file for this item yet, so no PO could be created automatically — add one in Vendors.", tone: "info" });
-        setTimeout(() => setAutoPOMessage(null), 8000);
+        setVendorPickerLoading(true);
+        setAutoPOModal({ tone: "pick-vendor", itemId, text: "No supplier on file for this item yet — who should this order go to?" });
+        const { data: suppliers } = await supabase.from("suppliers").select("id, name").eq("restaurant_id", RESTAURANT_ID).order("name");
+        setVendorPickerList(suppliers || []);
+        setVendorPickerLoading(false);
       }
     }
     // Reload rather than patch local state - changing a par can move an item
@@ -257,11 +260,61 @@ export default function HomeScreen({ onNavigate }) {
     load();
   }
 
+  async function assignSupplierAndCreatePO(supplierId) {
+    if (!autoPOModal?.itemId) return;
+    setVendorPickerLoading(true);
+    const { data: result } = await supabase.rpc("create_po_for_item_with_supplier", {
+      p_inventory_item_id: autoPOModal.itemId,
+      p_supplier_id: supplierId,
+    });
+    if (result?.created) {
+      setAutoPOModal({ tone: "success", text: `${result.po_number} created — ordered ${result.quantity} ${result.unit} of ${result.item_name} from ${result.supplier_name}.` });
+      load();
+    } else {
+      setAutoPOModal({ tone: "info", text: "Couldn't create the order — try again from the Reorder screen." });
+    }
+    setVendorPickerLoading(false);
+  }
+
   const allClear = pendingCount === 0 && belowParCount === 0 && stockoutRisks.length === 0;
   const healthyPct = health.total - health.noPar > 0 ? Math.round((health.healthy / (health.total - health.noPar)) * 100) : null;
 
   return (
     <div style={{ fontFamily: sans }}>
+      {autoPOModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, width: "100%", maxWidth: 360 }}>
+            <div style={{ fontSize: 14, color: textPrimary, lineHeight: 1.5, marginBottom: autoPOModal.tone === "pick-vendor" ? 14 : 16 }}>
+              {autoPOModal.text}
+            </div>
+
+            {autoPOModal.tone === "pick-vendor" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14, maxHeight: 220, overflowY: "auto" }}>
+                {vendorPickerLoading && <div style={{ fontSize: 13, color: textMuted, textAlign: "center", padding: 8 }}>Loading…</div>}
+                {!vendorPickerLoading && vendorPickerList.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => assignSupplierAndCreatePO(s.id)}
+                    style={{ width: "100%", textAlign: "left", background: "#F1F4F8", border: "1px solid #E2E6ED", borderRadius: 8, padding: "10px 12px", color: textPrimary, fontSize: 13, cursor: "pointer" }}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+                {!vendorPickerLoading && vendorPickerList.length === 0 && (
+                  <div style={{ fontSize: 12, color: textMuted, textAlign: "center", padding: 8 }}>No vendors on file yet — add one in Invoices → History.</div>
+                )}
+              </div>
+            )}
+
+            <button
+              onClick={() => setAutoPOModal(null)}
+              style={{ width: "100%", background: autoPOModal.tone === "pick-vendor" ? "none" : accent, border: autoPOModal.tone === "pick-vendor" ? "1px solid #E2E6ED" : "none", borderRadius: 8, padding: "11px", color: autoPOModal.tone === "pick-vendor" ? textMuted : "#FFFFFF", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+            >
+              {autoPOModal.tone === "pick-vendor" ? "None of these — skip for now" : "OK"}
+            </button>
+          </div>
+        </div>
+      )}
       <div style={{ padding: "24px 20px 8px" }}>
         <div style={{ fontSize: 12, letterSpacing: 1.5, textTransform: "uppercase", color: textMuted, marginBottom: 4 }}>
           {restaurantName}
@@ -272,18 +325,6 @@ export default function HomeScreen({ onNavigate }) {
       </div>
 
       <div style={{ padding: "16px 16px 8px", display: "flex", flexDirection: "column", gap: 10 }}>
-        {autoPOMessage && (
-          <div style={{
-            background: autoPOMessage.tone === "success" ? "#E7F0FA" : "#F1F4F8",
-            border: `1px solid ${autoPOMessage.tone === "success" ? accent : "#D6DCE5"}`,
-            borderRadius: 8,
-            padding: "10px 12px",
-            fontSize: 13,
-            color: autoPOMessage.tone === "success" ? accent : textMuted,
-          }}>
-            {autoPOMessage.text}
-          </div>
-        )}
         {!loading && timeStats.totalCount > 0 && (
           <div style={{ background: "linear-gradient(135deg, #1E5B8C, #164569)", borderRadius: 10, padding: "18px 18px", color: "#FFFFFF" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, opacity: 0.85 }}>

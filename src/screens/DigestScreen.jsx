@@ -23,7 +23,9 @@ export default function DigestScreen() {
   const [expectedDates, setExpectedDates] = useState({});
   const [editingParId, setEditingParId] = useState(null);
   const [sentError, setSentError] = useState({});
-  const [autoPOMessage, setAutoPOMessage] = useState(null);
+  const [autoPOModal, setAutoPOModal] = useState(null);
+  const [vendorPickerList, setVendorPickerList] = useState([]);
+  const [vendorPickerLoading, setVendorPickerLoading] = useState(false);
   const [confirmedPOs, setConfirmedPOs] = useState({});
 
   useEffect(() => {
@@ -115,24 +117,37 @@ export default function DigestScreen() {
     const { data: poResult } = await supabase.rpc("auto_create_po_if_needed", { p_inventory_item_id: itemId });
 
     if (poResult?.created) {
-      setAutoPOMessage({ text: `${poResult.po_number} created — ordered ${poResult.quantity} ${poResult.unit} of ${poResult.item_name} from ${poResult.supplier_name}.`, tone: "success" });
-      setTimeout(() => setAutoPOMessage(null), 6000);
+      setAutoPOModal({ tone: "success", text: `${poResult.po_number} created — ordered ${poResult.quantity} ${poResult.unit} of ${poResult.item_name} from ${poResult.supplier_name}.` });
       load(); // refresh - the item may now be covered by an open PO
+    } else if (poResult?.reason === "already_open") {
+      setAutoPOModal({ tone: "info", text: "Par updated. This item already has an open order, so no new PO was created." });
+      setGroups((prev) => prev.map((g) => ({ ...g, items: g.items.map((i) => (i.id === itemId ? { ...i, par_level: numValue } : i)) })));
+    } else if (poResult?.reason === "no_known_supplier") {
+      setVendorPickerLoading(true);
+      setAutoPOModal({ tone: "pick-vendor", itemId, text: "No supplier on file for this item yet — who should this order go to?" });
+      const { data: suppliers } = await supabase.from("suppliers").select("id, name").eq("restaurant_id", RESTAURANT_ID).order("name");
+      setVendorPickerList(suppliers || []);
+      setVendorPickerLoading(false);
+      setGroups((prev) => prev.map((g) => ({ ...g, items: g.items.map((i) => (i.id === itemId ? { ...i, par_level: numValue } : i)) })));
     } else {
-      if (poResult?.reason === "already_open") {
-        setAutoPOMessage({ text: "Par updated. This item already has an open order, so no new PO was created.", tone: "info" });
-      } else if (poResult?.reason === "no_known_supplier") {
-        setAutoPOMessage({ text: "Par updated. No supplier on file for this item yet, so no PO could be created automatically — add one in Vendors.", tone: "info" });
-      } else {
-        setAutoPOMessage(null);
-      }
-      if (poResult?.reason && poResult.reason !== "not_below_par") {
-        setTimeout(() => setAutoPOMessage(null), 8000);
-      }
-      setGroups((prev) =>
-        prev.map((g) => ({ ...g, items: g.items.map((i) => (i.id === itemId ? { ...i, par_level: numValue } : i)) }))
-      );
+      setGroups((prev) => prev.map((g) => ({ ...g, items: g.items.map((i) => (i.id === itemId ? { ...i, par_level: numValue } : i)) })));
     }
+  }
+
+  async function assignSupplierAndCreatePO(supplierId) {
+    if (!autoPOModal?.itemId) return;
+    setVendorPickerLoading(true);
+    const { data: result } = await supabase.rpc("create_po_for_item_with_supplier", {
+      p_inventory_item_id: autoPOModal.itemId,
+      p_supplier_id: supplierId,
+    });
+    if (result?.created) {
+      setAutoPOModal({ tone: "success", text: `${result.po_number} created — ordered ${result.quantity} ${result.unit} of ${result.item_name} from ${result.supplier_name}.` });
+      load();
+    } else {
+      setAutoPOModal({ tone: "info", text: "Couldn't create the order — try again from the Reorder screen." });
+    }
+    setVendorPickerLoading(false);
   }
   async function markSent(group) {
     // Re-verify against open purchase orders right before creating a new one -
@@ -223,17 +238,39 @@ export default function DigestScreen() {
 
   return (
     <div>
-      {autoPOMessage && (
-        <div style={{
-          margin: "16px 16px 0",
-          background: autoPOMessage.tone === "success" ? "#E7F0FA" : "#F1F4F8",
-          border: `1px solid ${autoPOMessage.tone === "success" ? accent : "#D6DCE5"}`,
-          borderRadius: 8,
-          padding: "10px 12px",
-          fontSize: 13,
-          color: autoPOMessage.tone === "success" ? accent : textMuted,
-        }}>
-          {autoPOMessage.text}
+      {autoPOModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, width: "100%", maxWidth: 360 }}>
+            {autoPOModal.tone === "success" && <FileCheck size={22} color={accent} style={{ marginBottom: 8 }} />}
+            <div style={{ fontSize: 14, color: textPrimary, lineHeight: 1.5, marginBottom: autoPOModal.tone === "pick-vendor" ? 14 : 16 }}>
+              {autoPOModal.text}
+            </div>
+
+            {autoPOModal.tone === "pick-vendor" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14, maxHeight: 220, overflowY: "auto" }}>
+                {vendorPickerLoading && <div style={{ fontSize: 13, color: textMuted, textAlign: "center", padding: 8 }}>Loading…</div>}
+                {!vendorPickerLoading && vendorPickerList.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => assignSupplierAndCreatePO(s.id)}
+                    style={{ width: "100%", textAlign: "left", background: "#F1F4F8", border: "1px solid #E2E6ED", borderRadius: 8, padding: "10px 12px", color: textPrimary, fontSize: 13, cursor: "pointer" }}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+                {!vendorPickerLoading && vendorPickerList.length === 0 && (
+                  <div style={{ fontSize: 12, color: textMuted, textAlign: "center", padding: 8 }}>No vendors on file yet — add one in Invoices → History.</div>
+                )}
+              </div>
+            )}
+
+            <button
+              onClick={() => setAutoPOModal(null)}
+              style={{ width: "100%", background: autoPOModal.tone === "pick-vendor" ? "none" : accent, border: autoPOModal.tone === "pick-vendor" ? "1px solid #E2E6ED" : "none", borderRadius: 8, padding: "11px", color: autoPOModal.tone === "pick-vendor" ? textMuted : "#FFFFFF", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+            >
+              {autoPOModal.tone === "pick-vendor" ? "None of these — skip for now" : "OK"}
+            </button>
+          </div>
         </div>
       )}
       <div style={{ padding: "24px 20px 8px" }}>
