@@ -121,6 +121,24 @@ export default function HomeScreen({ onNavigate }) {
     load();
   }, [RESTAURANT_ID]);
 
+  // Live sync: any change to inventory, invoices, or purchase orders for
+  // this restaurant re-runs load() automatically. Replaces relying on a
+  // manual load() call after every single mutation (fragile - easy to miss
+  // one, and doesn't help at all if the change came from another device,
+  // another tab, or the scheduled demo-activity job).
+  useEffect(() => {
+    if (!RESTAURANT_ID) return;
+    const channel = supabase
+      .channel(`home-${RESTAURANT_ID}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "inventory_items", filter: `restaurant_id=eq.${RESTAURANT_ID}` }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "invoices", filter: `restaurant_id=eq.${RESTAURANT_ID}` }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "purchase_orders", filter: `restaurant_id=eq.${RESTAURANT_ID}` }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "purchase_order_items" }, () => load())
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
+  }, [RESTAURANT_ID]);
+
   async function load() {
     if (!RESTAURANT_ID) return;
     setLoading(true);

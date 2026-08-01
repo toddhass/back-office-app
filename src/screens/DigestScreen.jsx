@@ -32,6 +32,20 @@ export default function DigestScreen() {
     load();
   }, [RESTAURANT_ID]);
 
+  // Live sync - see HomeScreen.jsx for the full rationale. Same pattern here
+  // since this screen shows the same underlying below-par/PO state.
+  useEffect(() => {
+    if (!RESTAURANT_ID) return;
+    const channel = supabase
+      .channel(`digest-${RESTAURANT_ID}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "inventory_items", filter: `restaurant_id=eq.${RESTAURANT_ID}` }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "purchase_orders", filter: `restaurant_id=eq.${RESTAURANT_ID}` }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "purchase_order_items" }, () => load())
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
+  }, [RESTAURANT_ID]);
+
   async function load() {
       if (!RESTAURANT_ID) return;
       setLoading(true);
