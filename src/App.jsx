@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Camera, Receipt, ClipboardList, LogOut, Home } from "lucide-react";
+import { Camera, Receipt, ClipboardList, LogOut, Home, ChevronDown } from "lucide-react";
 import HomeScreen from "./screens/HomeScreen";
 import CaptureScreen from "./screens/CaptureScreen";
 import InvoicesScreen from "./screens/InvoicesScreen";
@@ -11,8 +11,35 @@ import { supabase } from "./lib/supabaseClient";
 import { useIsDesktop } from "./lib/useIsDesktop";
 import { bg, sans, textMuted, accent, card, textPrimary, border } from "./lib/tokens";
 
+function RestaurantSwitcher({ restaurants, restaurantId, restaurantName, onSwitch, style }) {
+  if (restaurants.length <= 1) {
+    return <span style={style}>{restaurantName}</span>;
+  }
+  return (
+    <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+      <select
+        value={restaurantId}
+        onChange={(e) => onSwitch(e.target.value)}
+        style={{
+          ...style,
+          appearance: "none",
+          background: "none",
+          border: "none",
+          paddingRight: 16,
+          cursor: "pointer",
+        }}
+      >
+        {restaurants.map((r) => (
+          <option key={r.id} value={r.id}>{r.name}</option>
+        ))}
+      </select>
+      <ChevronDown size={12} color={style?.color || textMuted} style={{ position: "absolute", right: 0, pointerEvents: "none" }} />
+    </div>
+  );
+}
+
 export default function App() {
-  const { session, restaurantId, restaurantName, onboardingCompleted, loading } = useAuth();
+  const { session, restaurants, restaurantId, restaurantName, onboardingCompleted, switchRestaurant, loading } = useAuth();
   const [tab, setTab] = useState("home");
   const isDesktop = useIsDesktop();
 
@@ -39,6 +66,11 @@ export default function App() {
     return <OnboardingScreen />;
   }
 
+  function handleSwitch(id) {
+    switchRestaurant(id);
+    setTab("home");
+  }
+
   const tabs = [
     { key: "home", label: "Home", icon: Home },
     { key: "capture", label: "Capture", icon: Camera },
@@ -57,7 +89,15 @@ export default function App() {
       <div style={{ background: bg, minHeight: "100vh", fontFamily: sans, color: textPrimary, display: "flex" }}>
         {/* Sidebar */}
         <div style={{ width: 240, flexShrink: 0, background: card, borderRight: `1px solid ${border}`, minHeight: "100vh", display: "flex", flexDirection: "column", padding: "24px 16px" }}>
-          <div style={{ padding: "0 8px 24px", fontWeight: 700, fontSize: 15, letterSpacing: -0.2 }}>{restaurantName}</div>
+          <div style={{ padding: "0 8px 24px" }}>
+            <RestaurantSwitcher
+              restaurants={restaurants}
+              restaurantId={restaurantId}
+              restaurantName={restaurantName}
+              onSwitch={handleSwitch}
+              style={{ fontWeight: 700, fontSize: 15, letterSpacing: -0.2, color: textPrimary }}
+            />
+          </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {tabs.map(({ key, label, icon: Icon }) => (
               <button
@@ -113,7 +153,13 @@ export default function App() {
             background: card,
           }}
         >
-          <span style={{ fontSize: 12, color: textPrimary, fontWeight: 600 }}>{restaurantName}</span>
+          <RestaurantSwitcher
+            restaurants={restaurants}
+            restaurantId={restaurantId}
+            restaurantName={restaurantName}
+            onSwitch={handleSwitch}
+            style={{ fontSize: 12, color: textPrimary, fontWeight: 600 }}
+          />
           <button
             onClick={() => supabase.auth.signOut()}
             style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 11 }}
