@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { Store, Mail, Lock, Ticket } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { bg, card, textPrimary, textMuted, accent, danger, sans } from "../lib/tokens";
 
-const inputStyle = {
+const inputStyle: CSSProperties = {
   width: "100%",
   background: "#F9FAFB",
   border: "1px solid #D6DCE5",
@@ -40,7 +40,8 @@ export default function LoginScreen() {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) setError(`${error.name || "AuthError"} (${error.status || "?"}): ${error.message || JSON.stringify(error)}`);
     } catch (err) {
-      setError(`Unexpected error: ${err?.name || "Error"}: ${err?.message || JSON.stringify(err) || String(err)}`);
+      const e = err instanceof Error ? err : null;
+      setError(`Unexpected error: ${e?.name || "Error"}: ${e?.message || JSON.stringify(err) || String(err)}`);
     } finally {
       setLoading(false);
     }
@@ -94,7 +95,8 @@ export default function LoginScreen() {
 
     await refreshRestaurant();
     } catch (err) {
-      setError(`Unexpected error: ${err?.name || "Error"}: ${err?.message || JSON.stringify(err) || String(err)}`);
+      const e = err instanceof Error ? err : null;
+      setError(`Unexpected error: ${e?.name || "Error"}: ${e?.message || JSON.stringify(err) || String(err)}`);
     } finally {
       setLoading(false);
     }

@@ -3,8 +3,32 @@ import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, Tr
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, sans, mono } from "../lib/tokens";
+import type { Database } from "../lib/database.types";
+import type { AutoCreatePOResult, CreatePOWithSupplierResult } from "../lib/rpc-types";
 
-function ItemHealthRow({ item, valueColor, editingParId, setEditingParId, updateParLevel }) {
+interface AutoPOModalState {
+  tone: "success" | "info" | "pick-vendor";
+  text: string;
+  itemId?: string;
+}
+
+interface HealthItem {
+  id: string;
+  name: string;
+  unit: string;
+  current_stock: number | null;
+  par_level: number | null;
+}
+
+interface ItemHealthRowProps {
+  item: HealthItem;
+  valueColor: string;
+  editingParId: string | null;
+  setEditingParId: (id: string | null) => void;
+  updateParLevel: (itemId: string, value: string) => void;
+}
+
+function ItemHealthRow({ item, valueColor, editingParId, setEditingParId, updateParLevel }: ItemHealthRowProps) {
   const isEditing = editingParId === item.id;
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, gap: 8 }}>
@@ -16,7 +40,7 @@ function ItemHealthRow({ item, valueColor, editingParId, setEditingParId, update
           autoFocus
           placeholder="Par"
           onBlur={(e) => updateParLevel(item.id, e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && updateParLevel(item.id, e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && updateParLevel(item.id, (e.target as HTMLInputElement).value)}
           style={{ width: 56, background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 4, padding: "2px 6px", color: textPrimary, fontSize: 11, fontFamily: mono }}
         />
       ) : (
@@ -33,7 +57,19 @@ function ItemHealthRow({ item, valueColor, editingParId, setEditingParId, update
   );
 }
 
-function HealthCategorySection({ categoryKey, label, color, items, expandedCategory, setExpandedCategory, editingParId, setEditingParId, updateParLevel }) {
+interface HealthCategorySectionProps {
+  categoryKey: string;
+  label: string;
+  color: string;
+  items: HealthItem[];
+  expandedCategory: string | null;
+  setExpandedCategory: (key: string | null) => void;
+  editingParId: string | null;
+  setEditingParId: (id: string | null) => void;
+  updateParLevel: (itemId: string, value: string) => void;
+}
+
+function HealthCategorySection({ categoryKey, label, color, items, expandedCategory, setExpandedCategory, editingParId, setEditingParId, updateParLevel }: HealthCategorySectionProps) {
   if (items.length === 0) return null;
   const isOpen = expandedCategory === categoryKey;
   return (
@@ -58,7 +94,15 @@ function HealthCategorySection({ categoryKey, label, color, items, expandedCateg
   );
 }
 
-function PORow({ po }) {
+interface POSummaryItem {
+  id: string;
+  po_number: string | null;
+  supplier: string;
+  expected_delivery_date: string | null;
+  itemCount: number;
+}
+
+function PORow({ po }: { po: POSummaryItem }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}>
       <div>
@@ -73,7 +117,16 @@ function PORow({ po }) {
   );
 }
 
-function POCategorySection({ categoryKey, label, color, items, expandedCategory, setExpandedCategory }) {
+interface POCategorySectionProps {
+  categoryKey: string;
+  label: string;
+  color: string;
+  items: POSummaryItem[];
+  expandedCategory: string | null;
+  setExpandedCategory: (key: string | null) => void;
+}
+
+function POCategorySection({ categoryKey, label, color, items, expandedCategory, setExpandedCategory }: POCategorySectionProps) {
   if (items.length === 0) return null;
   const isOpen = expandedCategory === categoryKey;
   return (
@@ -98,25 +151,25 @@ function POCategorySection({ categoryKey, label, color, items, expandedCategory,
   );
 }
 
-export default function HomeScreen({ onNavigate }) {
+export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) => void }) {
   const { restaurantId: RESTAURANT_ID, restaurantName } = useAuth();
   const [loading, setLoading] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
   const [vendorConfirmCount, setVendorConfirmCount] = useState(0);
   const [belowParCount, setBelowParCount] = useState(0);
-  const [stockoutRisks, setStockoutRisks] = useState([]);
-  const [atRiskItems, setAtRiskItems] = useState([]);
-  const [health, setHealth] = useState({ total: 0, healthy: 0, belowPar: 0, noPar: 0, healthyItems: [], belowParItems: [], noParItems: [] });
+  const [stockoutRisks, setStockoutRisks] = useState<Database["public"]["Functions"]["stockout_risk_items"]["Returns"]>([]);
+  const [atRiskItems, setAtRiskItems] = useState<Database["public"]["Functions"]["at_risk_items"]["Returns"]>([]);
+  const [health, setHealth] = useState<{ total: number; healthy: number; belowPar: number; noPar: number; healthyItems: HealthItem[]; belowParItems: HealthItem[]; noParItems: HealthItem[] }>({ total: 0, healthy: 0, belowPar: 0, noPar: 0, healthyItems: [], belowParItems: [], noParItems: [] });
   const [showHealthDetail, setShowHealthDetail] = useState(false);
-  const [expandedCategory, setExpandedCategory] = useState(null); // 'belowPar' | 'noPar' | 'healthy' | null
-  const [editingParId, setEditingParId] = useState(null);
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null); // 'belowPar' | 'noPar' | 'healthy' | null
+  const [editingParId, setEditingParId] = useState<string | null>(null);
   const [timeStats, setTimeStats] = useState({ monthCount: 0, totalCount: 0 });
   const [wasteStats, setWasteStats] = useState({ count: 0, value: 0 });
-  const [poSummary, setPoSummary] = useState({ total: 0, openPOs: [], partialPOs: [], fulfilledPOs: [] });
+  const [poSummary, setPoSummary] = useState<{ total: number; openPOs: POSummaryItem[]; partialPOs: POSummaryItem[]; fulfilledPOs: POSummaryItem[] }>({ total: 0, openPOs: [], partialPOs: [], fulfilledPOs: [] });
   const [showPODetail, setShowPODetail] = useState(false);
-  const [expandedPOCategory, setExpandedPOCategory] = useState(null);
-  const [autoPOModal, setAutoPOModal] = useState(null);
-  const [vendorPickerList, setVendorPickerList] = useState([]);
+  const [expandedPOCategory, setExpandedPOCategory] = useState<string | null>(null);
+  const [autoPOModal, setAutoPOModal] = useState<AutoPOModalState | null>(null);
+  const [vendorPickerList, setVendorPickerList] = useState<{ id: string; name: string }[]>([]);
   const [vendorPickerLoading, setVendorPickerLoading] = useState(false);
 
   useEffect(() => {
@@ -138,7 +191,9 @@ export default function HomeScreen({ onNavigate }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "purchase_order_items" }, () => load())
       .subscribe();
 
-    return () => supabase.removeChannel(channel);
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [RESTAURANT_ID]);
 
   async function load() {
@@ -165,8 +220,8 @@ export default function HomeScreen({ onNavigate }) {
     const items = allItems || [];
     const noParItems = items.filter((i) => i.par_level == null);
     const tracked = items.filter((i) => i.par_level != null);
-    const belowParItems = tracked.filter((i) => i.current_stock <= i.par_level);
-    const healthyItems = tracked.filter((i) => i.current_stock > i.par_level);
+    const belowParItems = tracked.filter((i) => (i.current_stock ?? 0) <= (i.par_level ?? 0));
+    const healthyItems = tracked.filter((i) => (i.current_stock ?? 0) > (i.par_level ?? 0));
     setHealth({
       total: items.length,
       healthy: healthyItems.length,
@@ -186,7 +241,7 @@ export default function HomeScreen({ onNavigate }) {
       .eq("restaurant_id", RESTAURANT_ID)
       .in("status", ["sent", "partial"]);
 
-    let openItemIds = new Set();
+    let openItemIds = new Set<string>();
     if (openPOs && openPOs.length > 0) {
       const { data: openPOItems } = await supabase
         .from("purchase_order_items")
@@ -200,7 +255,7 @@ export default function HomeScreen({ onNavigate }) {
     }
 
     setBelowParCount(
-      tracked.filter((i) => i.current_stock <= i.par_level && !openItemIds.has(i.id)).length
+      tracked.filter((i) => (i.current_stock ?? 0) <= (i.par_level ?? 0) && !openItemIds.has(i.id)).length
     );
 
     const { data: risks } = await supabase.rpc("stockout_risk_items", { p_restaurant_id: RESTAURANT_ID });
@@ -261,30 +316,31 @@ export default function HomeScreen({ onNavigate }) {
 
     setPoSummary({
       total: allPOs.length,
-      openPOs: (pos || []).filter((p) => p.status === "sent").map((p) => allPOs.find((a) => a.id === p.id)),
-      partialPOs: (pos || []).filter((p) => p.status === "partial").map((p) => allPOs.find((a) => a.id === p.id)),
-      fulfilledPOs: (pos || []).filter((p) => p.status === "fulfilled").map((p) => allPOs.find((a) => a.id === p.id)),
+      openPOs: (pos || []).filter((p) => p.status === "sent").map((p) => allPOs.find((a) => a.id === p.id)).filter((p): p is POSummaryItem => p !== undefined),
+      partialPOs: (pos || []).filter((p) => p.status === "partial").map((p) => allPOs.find((a) => a.id === p.id)).filter((p): p is POSummaryItem => p !== undefined),
+      fulfilledPOs: (pos || []).filter((p) => p.status === "fulfilled").map((p) => allPOs.find((a) => a.id === p.id)).filter((p): p is POSummaryItem => p !== undefined),
     });
 
     setLoading(false);
   }
 
-  async function updateParLevel(itemId, value) {
+  async function updateParLevel(itemId: string, value: string) {
     const numValue = value === "" ? null : parseFloat(value);
-    if (value !== "" && isNaN(numValue)) return;
+    if (value !== "" && numValue !== null && isNaN(numValue)) return;
     await supabase.from("inventory_items").update({ par_level: numValue }).eq("id", itemId);
     setEditingParId(null);
 
     if (numValue !== null) {
       const { data: poResult } = await supabase.rpc("auto_create_po_if_needed", { p_inventory_item_id: itemId });
-      if (poResult?.created) {
-        setAutoPOModal({ tone: "success", text: `${poResult.po_number} created — ordered ${poResult.quantity} ${poResult.unit} of ${poResult.item_name} from ${poResult.supplier_name}.` });
-      } else if (poResult?.reason === "already_open") {
+      const typedResult = poResult as AutoCreatePOResult | null;
+      if (typedResult?.created) {
+        setAutoPOModal({ tone: "success", text: `${typedResult.po_number} created — ordered ${typedResult.quantity} ${typedResult.unit} of ${typedResult.item_name} from ${typedResult.supplier_name}.` });
+      } else if (typedResult?.reason === "already_open") {
         setAutoPOModal({ tone: "info", text: "Par updated. This item already has an open order, so no new PO was created." });
-      } else if (poResult?.reason === "no_known_supplier") {
+      } else if (typedResult?.reason === "no_known_supplier") {
         setVendorPickerLoading(true);
         setAutoPOModal({ tone: "pick-vendor", itemId, text: "No supplier on file for this item yet — who should this order go to?" });
-        const { data: suppliers } = await supabase.from("suppliers").select("id, name").eq("restaurant_id", RESTAURANT_ID).order("name");
+        const { data: suppliers } = await supabase.from("suppliers").select("id, name").eq("restaurant_id", RESTAURANT_ID ?? "").order("name");
         setVendorPickerList(suppliers || []);
         setVendorPickerLoading(false);
       }
@@ -295,15 +351,16 @@ export default function HomeScreen({ onNavigate }) {
     load();
   }
 
-  async function assignSupplierAndCreatePO(supplierId) {
+  async function assignSupplierAndCreatePO(supplierId: string) {
     if (!autoPOModal?.itemId) return;
     setVendorPickerLoading(true);
     const { data: result } = await supabase.rpc("create_po_for_item_with_supplier", {
       p_inventory_item_id: autoPOModal.itemId,
       p_supplier_id: supplierId,
     });
-    if (result?.created) {
-      setAutoPOModal({ tone: "success", text: `${result.po_number} created — ordered ${result.quantity} ${result.unit} of ${result.item_name} from ${result.supplier_name}.` });
+    const typedResult = result as CreatePOWithSupplierResult | null;
+    if (typedResult?.created) {
+      setAutoPOModal({ tone: "success", text: `${typedResult.po_number} created — ordered ${typedResult.quantity} ${typedResult.unit} of ${typedResult.item_name} from ${typedResult.supplier_name}.` });
       load();
     } else {
       setAutoPOModal({ tone: "info", text: "Couldn't create the order — try again from the Reorder screen." });

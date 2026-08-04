@@ -5,26 +5,57 @@ import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, mono } from "../lib/tokens";
 
-export default function CaptureScreen({ onDone }) {
+interface CaptureResult {
+  supplier: string;
+  itemCount: number;
+  needsReview: number;
+  total: number;
+  matchedExistingSupplier: boolean | null;
+  supplierMatchMethod: string | null;
+  rawSupplierName: string | null;
+}
+
+interface BatchResultItem {
+  fileName: string;
+  ok: boolean;
+  detail?: string;
+  duplicate?: boolean;
+  supplier?: string;
+  total?: number;
+}
+
+// raw_extraction is genuinely unstructured jsonb (whatever Gemini returned) -
+// there's no fixed schema Postgres could describe, so Json is the honest
+// type. This helper narrows it just enough to read the one field this
+// screen actually uses, without pretending the whole shape is known.
+function extractSupplierName(rawExtraction: unknown): string | null {
+  if (rawExtraction && typeof rawExtraction === "object" && "supplier_name" in rawExtraction) {
+    const val = (rawExtraction as Record<string, unknown>).supplier_name;
+    return typeof val === "string" ? val : null;
+  }
+  return null;
+}
+
+export default function CaptureScreen({ onDone }: { onDone: () => void }) {
   const { restaurantId: RESTAURANT_ID } = useAuth();
-  const [status, setStatus] = useState("idle"); // idle | uploading | processing | done | error
-  const [fileName, setFileName] = useState(null);
-  const [result, setResult] = useState(null);
+  const [status, setStatus] = useState<"idle" | "uploading" | "processing" | "done" | "error" | "batch-processing" | "batch-done">("idle");
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [result, setResult] = useState<CaptureResult | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
-  const [batchResults, setBatchResults] = useState([]);
+  const [batchResults, setBatchResults] = useState<BatchResultItem[]>([]);
   const [batchTotal, setBatchTotal] = useState(0);
   const [batchCurrent, setBatchCurrent] = useState(0);
   const [batchFileName, setBatchFileName] = useState("");
-  const fileInputRef = useRef(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState("");
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const streamRef = useRef(null);
-  const scanIntervalRef = useRef(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  async function handleFileSelect(e) {
-    const file = e.target.files[0];
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
     setStatus("uploading");
@@ -42,7 +73,7 @@ export default function CaptureScreen({ onDone }) {
     await processStoragePath(path);
   }
 
-  async function processStoragePath(path) {
+  async function processStoragePath(path: string) {
     const { data, error: fnError } = await supabase.functions.invoke("extract-invoice", {
       body: { restaurant_id: RESTAURANT_ID, storage_path: path },
     });
@@ -77,13 +108,13 @@ export default function CaptureScreen({ onDone }) {
       .single();
 
     setResult({
-      supplier: invoiceRow?.suppliers?.name || invoiceRow?.raw_extraction?.supplier_name || "Unknown",
+      supplier: invoiceRow?.suppliers?.name || extractSupplierName(invoiceRow?.raw_extraction) || "Unknown",
       itemCount: lineItems?.length || 0,
       needsReview: (lineItems || []).filter((i) => i.needs_review).length,
       total: invoiceRow?.invoice_total || 0,
       matchedExistingSupplier: data?.matched_existing_supplier || null,
       supplierMatchMethod: data?.supplier_match_method || null,
-      rawSupplierName: invoiceRow?.raw_extraction?.supplier_name || null,
+      rawSupplierName: extractSupplierName(invoiceRow?.raw_extraction),
     });
     setStatus("done");
   }
@@ -107,6 +138,7 @@ export default function CaptureScreen({ onDone }) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         const ctx = canvas.getContext("2d");
+        if (!ctx) return;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height);
@@ -159,7 +191,7 @@ export default function CaptureScreen({ onDone }) {
     return () => stopQRScan();
   }, []);
 
-  async function extractSingleFile(file) {
+  async function extractSingleFile(file: File): Promise<BatchResultItem> {
     const path = `${RESTAURANT_ID}/${Date.now()}-${file.name}`;
     const { error: uploadError } = await supabase.storage.from("invoices").upload(path, file);
     if (uploadError) {
@@ -178,7 +210,7 @@ export default function CaptureScreen({ onDone }) {
           detail = body?.error || detail;
         }
       } catch (_) {}
-      const isDuplicate = detail?.startsWith("Duplicate:");
+      const isDuplicate = !!detail?.startsWith("Duplicate:");
       return { fileName: file.name, ok: false, duplicate: isDuplicate, detail };
     }
 
@@ -191,12 +223,12 @@ export default function CaptureScreen({ onDone }) {
     return {
       fileName: file.name,
       ok: true,
-      supplier: invoiceRow?.suppliers?.name || invoiceRow?.raw_extraction?.supplier_name || "Unknown",
+      supplier: invoiceRow?.suppliers?.name || extractSupplierName(invoiceRow?.raw_extraction) || "Unknown",
       total: invoiceRow?.invoice_total || 0,
     };
   }
 
-  async function handleBatchFileSelect(e) {
+  async function handleBatchFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
@@ -205,7 +237,7 @@ export default function CaptureScreen({ onDone }) {
     setBatchCurrent(0);
     setBatchResults([]);
 
-    const results = [];
+    const results: BatchResultItem[] = [];
     for (let i = 0; i < files.length; i++) {
       setBatchCurrent(i + 1);
       setBatchFileName(files[i].name);

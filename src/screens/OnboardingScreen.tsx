@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { Store, Plus, Trash2, ArrowRight, CheckCircle2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { bg, card, cardAlt, textPrimary, textMuted, accent, accentBg, border, borderStrong, good, sans, mono } from "../lib/tokens";
 
-const inputStyle = {
+const inputStyle: CSSProperties = {
   width: "100%",
   background: "#F9FAFB",
   border: `1px solid ${borderStrong}`,
@@ -15,34 +15,49 @@ const inputStyle = {
   boxSizing: "border-box",
 };
 
+interface SupplierRow {
+  name: string;
+  phone: string;
+}
+interface ItemRow {
+  name: string;
+  unit: string;
+  parLevel: string;
+}
+
 export default function OnboardingScreen() {
   const { restaurantId, refreshRestaurant } = useAuth();
   const [step, setStep] = useState(0); // 0 welcome, 1 suppliers, 2 inventory, 3 done
-  const [suppliers, setSuppliers] = useState([{ name: "", phone: "" }]);
-  const [items, setItems] = useState([{ name: "", unit: "lb", parLevel: "" }]);
+  const [suppliers, setSuppliers] = useState<SupplierRow[]>([{ name: "", phone: "" }]);
+  const [items, setItems] = useState<ItemRow[]>([{ name: "", unit: "lb", parLevel: "" }]);
   const [saving, setSaving] = useState(false);
 
-  function updateSupplier(i, field, value) {
+  function updateSupplier(i: number, field: keyof SupplierRow, value: string) {
     setSuppliers((prev) => prev.map((s, idx) => (idx === i ? { ...s, [field]: value } : s)));
   }
   function addSupplierRow() {
     setSuppliers((prev) => [...prev, { name: "", phone: "" }]);
   }
-  function removeSupplierRow(i) {
+  function removeSupplierRow(i: number) {
     setSuppliers((prev) => prev.filter((_, idx) => idx !== i));
   }
 
-  function updateItem(i, field, value) {
+  function updateItem(i: number, field: keyof ItemRow, value: string) {
     setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, [field]: value } : it)));
   }
   function addItemRow() {
     setItems((prev) => [...prev, { name: "", unit: "lb", parLevel: "" }]);
   }
-  function removeItemRow(i) {
+  function removeItemRow(i: number) {
     setItems((prev) => prev.filter((_, idx) => idx !== i));
   }
 
   async function saveSuppliersAndContinue() {
+    // Real guard, not just a type cast: onboarding should never run without
+    // a current restaurant, but nothing enforced that before - this would
+    // have silently tried to insert restaurant_id: null and hit a Postgres
+    // NOT NULL violation instead of failing clearly here.
+    if (!restaurantId) return;
     setSaving(true);
     const validSuppliers = suppliers.filter((s) => s.name.trim());
     if (validSuppliers.length > 0) {
@@ -55,6 +70,7 @@ export default function OnboardingScreen() {
   }
 
   async function saveItemsAndFinish() {
+    if (!restaurantId) return;
     setSaving(true);
     const validItems = items.filter((it) => it.name.trim());
     if (validItems.length > 0) {
@@ -72,6 +88,7 @@ export default function OnboardingScreen() {
   }
 
   async function finishOnboarding() {
+    if (!restaurantId) return;
     await supabase.from("restaurants").update({ onboarding_completed: true }).eq("id", restaurantId);
     await refreshRestaurant();
     setSaving(false);
