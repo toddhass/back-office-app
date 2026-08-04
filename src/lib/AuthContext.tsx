@@ -1,23 +1,58 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabaseClient";
 
-const AuthContext = createContext(null);
 const STORAGE_KEY = "back_office_current_restaurant_id";
 
-export function AuthProvider({ children }) {
-  const [session, setSession] = useState(null);
-  const [restaurants, setRestaurants] = useState([]); // [{ id, name, onboarding_completed, role }]
-  const [currentRestaurantId, setCurrentRestaurantId] = useState(null);
+interface Restaurant {
+  id: string;
+  name: string;
+  onboarding_completed: boolean;
+  role: string;
+}
+
+interface AuthContextValue {
+  session: Session | null;
+  loading: boolean;
+  restaurants: Restaurant[];
+  restaurantId: string | null;
+  restaurantName: string | null;
+  onboardingCompleted: boolean;
+  switchRestaurant: (id: string) => void;
+  refreshRestaurant: () => Promise<void>;
+}
+
+// This default value is the actual reason the JS version cascaded so many
+// "never"/"unknown" errors into every screen that calls useAuth(): with
+// createContext(null), TS infers the context type as `Context<null>`,
+// so restaurantId/onboardingCompleted/etc. don't exist on anything a
+// screen destructures from it. Giving it a real default matching the
+// shape fixes that at the source, for every consumer at once.
+const AuthContext = createContext<AuthContextValue>({
+  session: null,
+  loading: true,
+  restaurants: [],
+  restaurantId: null,
+  restaurantName: null,
+  onboardingCompleted: true,
+  switchRestaurant: () => {},
+  refreshRestaurant: async () => {},
+});
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [session, setSession] = useState<Session | null>(null);
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [currentRestaurantId, setCurrentRestaurantId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function loadRestaurants(userId) {
+  async function loadRestaurants(userId: string) {
     const { data } = await supabase
       .from("staff_restaurants")
       .select("restaurant_id, role, restaurants(name, onboarding_completed)")
       .eq("user_id", userId)
       .order("created_at", { ascending: true });
 
-    const list = (data || []).map((row) => ({
+    const list: Restaurant[] = (data || []).map((row: any) => ({
       id: row.restaurant_id,
       name: row.restaurants?.name || "Untitled restaurant",
       onboarding_completed: row.restaurants?.onboarding_completed ?? true,
@@ -30,12 +65,9 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    // Prefer the last restaurant the user was actively viewing, but only
-    // if they're still actually linked to it (handles someone being
-    // removed from a restaurant, or the saved id being stale/invalid).
     const saved = typeof window !== "undefined" ? window.localStorage.getItem(STORAGE_KEY) : null;
     const savedStillValid = saved && list.some((r) => r.id === saved);
-    setCurrentRestaurantId(savedStillValid ? saved : list[0].id);
+    setCurrentRestaurantId(savedStillValid ? saved! : list[0].id);
   }
 
   useEffect(() => {
@@ -54,14 +86,16 @@ export function AuthProvider({ children }) {
       }
     });
 
-    return () => listener.subscription.unsubscribe();
+    return () => {
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   async function refreshRestaurant() {
     if (session?.user) await loadRestaurants(session.user.id);
   }
 
-  function switchRestaurant(id) {
+  function switchRestaurant(id: string) {
     if (!restaurants.some((r) => r.id === id)) return;
     setCurrentRestaurantId(id);
     if (typeof window !== "undefined") window.localStorage.setItem(STORAGE_KEY, id);

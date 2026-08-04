@@ -4,14 +4,45 @@ import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, mono } from "../lib/tokens";
 
-function suggestQty(item) {
+interface DigestItem {
+  id: string;
+  name: string;
+  unit: string;
+  current_stock: number;
+  par_level: number;
+}
+
+interface SupplierGroup {
+  supplier: string;
+  items: DigestItem[];
+  phone: string | null;
+  supplierId: string | null;
+  justSent?: boolean;
+}
+
+interface AutoPOModalState {
+  tone: "success" | "info" | "pick-vendor";
+  text: string;
+  itemId?: string;
+}
+
+function suggestQty(item: DigestItem): number {
   // Floor of 1: an item exactly AT par still counts as "below par" (<=)
   // throughout the app, but ordering 0 units is useless. Same fix already
   // applied to the SQL-side auto-PO functions - this was the one place it
   // got missed, and it produced two real 0-quantity POs before being caught.
+  //
+  // Worth noting: this function's SIGNATURE is where TS actually helps -
+  // `item: DigestItem` means current_stock/par_level are guaranteed to be
+  // `number` here. But that guarantee only holds if whoever fetched this
+  // data from Supabase remembered to convert the numeric-as-string values
+  // first. TypeScript catches a wrong TYPE, not a forgotten conversion -
+  // that's still on the developer, same as in the JS version. Worth being
+  // honest about the limits of what this buys you.
   return Math.max(1, Math.ceil(item.par_level - item.current_stock));
 }
-function draftMessage(supplierName, items) {
+
+function draftMessage(supplierName: string, items: DigestItem[]): string {
   const lines = items.map((i) => `${suggestQty(i)} ${i.unit}${suggestQty(i) > 1 ? "s" : ""} ${i.name.split(",")[0]}`);
   return `Hi ${supplierName.split(" ")[0]} team — could we get:\n${lines.map((l) => `• ${l}`).join("\n")}\nThanks!`;
 }
@@ -19,18 +50,18 @@ function draftMessage(supplierName, items) {
 export default function DigestScreen() {
   const { restaurantId: RESTAURANT_ID } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [groups, setGroups] = useState([]); // [{ supplier, items }]
-  const [expanded, setExpanded] = useState({});
-  const [drafts, setDrafts] = useState({});
-  const [copied, setCopied] = useState(null);
-  const [sent, setSent] = useState({});
-  const [expectedDates, setExpectedDates] = useState({});
-  const [editingParId, setEditingParId] = useState(null);
-  const [sentError, setSentError] = useState({});
-  const [autoPOModal, setAutoPOModal] = useState(null);
-  const [vendorPickerList, setVendorPickerList] = useState([]);
+  const [groups, setGroups] = useState<SupplierGroup[]>([]);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [copied, setCopied] = useState<string | null>(null);
+  const [sent, setSent] = useState<Record<string, boolean>>({});
+  const [expectedDates, setExpectedDates] = useState<Record<string, string>>({});
+  const [editingParId, setEditingParId] = useState<string | null>(null);
+  const [sentError, setSentError] = useState<Record<string, string>>({});
+  const [autoPOModal, setAutoPOModal] = useState<AutoPOModalState | null>(null);
+  const [vendorPickerList, setVendorPickerList] = useState<{ id: string; name: string }[]>([]);
   const [vendorPickerLoading, setVendorPickerLoading] = useState(false);
-  const [confirmedPOs, setConfirmedPOs] = useState({});
+  const [confirmedPOs, setConfirmedPOs] = useState<Record<string, { po_number: string; expected_delivery_date: string | null; supplier: string; items: { name: string; qty: number; unit: string }[] }>>({});
 
   useEffect(() => {
     load();
@@ -47,7 +78,9 @@ export default function DigestScreen() {
       .on("postgres_changes", { event: "*", schema: "public", table: "purchase_order_items" }, () => load())
       .subscribe();
 
-    return () => supabase.removeChannel(channel);
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [RESTAURANT_ID]);
 
   async function load() {
@@ -126,10 +159,17 @@ export default function DigestScreen() {
     setCopied(supplier);
     setTimeout(() => setCopied(null), 1500);
   }
-  async function updateParLevel(itemId, value) {
+  async function updateParLevel(itemId: string, value: string) {
     const numValue = parseFloat(value);
     if (isNaN(numValue)) return;
-    await supabase.from("inventory_items").update({ par_level: numValue }).eq("id", itemId);
+
+    // par_level: numValue <- this line, exactly as it existed in the JS
+    // version, is a REAL compile error against database.types.ts: Update
+    // expects par_level as `string | null` (Postgres numeric), not
+    // `number`. This isn't a style nitpick - it's the same class of bug
+    // as tonight's short-shipment string-concatenation issue, caught here
+    // before ever running instead of after a live test.
+    await supabase.from("inventory_items").update({ par_level: String(numValue) }).eq("id", itemId);
     setEditingParId(null);
 
     const { data: poResult } = await supabase.rpc("auto_create_po_if_needed", { p_inventory_item_id: itemId });
@@ -152,7 +192,7 @@ export default function DigestScreen() {
     }
   }
 
-  async function assignSupplierAndCreatePO(supplierId) {
+  async function assignSupplierAndCreatePO(supplierId: string) {
     if (!autoPOModal?.itemId) return;
     setVendorPickerLoading(true);
     const { data: result } = await supabase.rpc("create_po_for_item_with_supplier", {
@@ -167,7 +207,7 @@ export default function DigestScreen() {
     }
     setVendorPickerLoading(false);
   }
-  async function markSent(group) {
+  async function markSent(group: SupplierGroup) {
     // Re-verify against open purchase orders right before creating a new one -
     // defense in depth in case this group's data went stale between the last
     // load() and this tap (e.g. another device/tab already sent an order for
@@ -354,7 +394,7 @@ export default function DigestScreen() {
                                   defaultValue={item.par_level}
                                   autoFocus
                                   onBlur={(e) => updateParLevel(item.id, e.target.value)}
-                                  onKeyDown={(e) => e.key === "Enter" && updateParLevel(item.id, e.target.value)}
+                                  onKeyDown={(e) => e.key === "Enter" && updateParLevel(item.id, (e.target as HTMLInputElement).value)}
                                   style={{ width: 40, background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 4, padding: "2px 4px", color: textPrimary, fontSize: 11, fontFamily: mono }}
                                 />
                                 <span style={{ fontSize: 11, color: textMuted }}>{item.unit}</span>
