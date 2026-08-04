@@ -6,6 +6,8 @@ import { card, textPrimary, textMuted, accent, danger, good, sans, mono } from "
 import type { Database } from "../lib/database.types";
 import type { AutoCreatePOResult, CreatePOWithSupplierResult } from "../lib/rpc-types";
 import AskAgentModal from "./AskAgentModal";
+import Modal from "../components/ui/Modal";
+import Button from "../components/ui/Button";
 
 interface AutoPOModalState {
   tone: "success" | "info" | "pick-vendor";
@@ -32,8 +34,8 @@ interface ItemHealthRowProps {
 function ItemHealthRow({ item, valueColor, editingParId, setEditingParId, updateParLevel }: ItemHealthRowProps) {
   const isEditing = editingParId === item.id;
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, gap: 8 }}>
-      <span style={{ color: textPrimary, flex: 1 }}>{item.name}</span>
+    <div className="flex justify-between items-center text-xs gap-2">
+      <span className="text-ink flex-1">{item.name}</span>
       {isEditing ? (
         <input
           type="number"
@@ -42,14 +44,14 @@ function ItemHealthRow({ item, valueColor, editingParId, setEditingParId, update
           placeholder="Par"
           onBlur={(e) => updateParLevel(item.id, e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && updateParLevel(item.id, (e.target as HTMLInputElement).value)}
-          style={{ width: 56, background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 4, padding: "2px 6px", color: textPrimary, fontSize: 11, fontFamily: mono }}
+          className="w-14 bg-input-bg border border-border-strong rounded text-ink text-[11px] font-mono px-1.5 py-0.5"
         />
       ) : (
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <span style={{ color: valueColor, fontFamily: mono }}>
+        <div className="flex items-center gap-1">
+          <span className="font-mono" style={{ color: valueColor }}>
             {item.par_level != null ? `${item.current_stock} / ${item.par_level} ${item.unit}` : "no par set"}
           </span>
-          <button onClick={() => setEditingParId(item.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", padding: 1 }}>
+          <button onClick={() => setEditingParId(item.id)} className="bg-transparent border-none text-slate cursor-pointer p-px">
             <Pencil size={10} />
           </button>
         </div>
@@ -77,15 +79,15 @@ function HealthCategorySection({ categoryKey, label, color, items, expandedCateg
     <div>
       <button
         onClick={() => setExpandedCategory(isOpen ? null : categoryKey)}
-        style={{ width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isOpen ? 6 : 0 }}
+        className={`w-full bg-transparent border-none p-0 cursor-pointer flex items-center justify-between ${isOpen ? "mb-1.5" : "mb-0"}`}
       >
-        <span style={{ fontSize: 11, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: 0.5 }}>
+        <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color }}>
           {label} ({items.length})
         </span>
         {isOpen ? <ChevronUp size={12} color={color} /> : <ChevronDown size={12} color={color} />}
       </button>
       {isOpen && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 180, minHeight: 0, overflowY: "auto" }}>
+        <div className="flex flex-col gap-1 max-h-[180px] min-h-0 overflow-y-auto">
           {items.map((i) => (
             <ItemHealthRow key={i.id} item={i} valueColor={color} editingParId={editingParId} setEditingParId={setEditingParId} updateParLevel={updateParLevel} />
           ))}
@@ -105,12 +107,12 @@ interface POSummaryItem {
 
 function PORow({ po }: { po: POSummaryItem }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}>
+    <div className="flex justify-between items-center text-xs">
       <div>
-        <span style={{ color: textPrimary, fontFamily: mono, fontWeight: 600 }}>{po.po_number}</span>
-        <span style={{ color: textMuted }}> · {po.supplier}</span>
+        <span className="text-ink font-mono font-semibold">{po.po_number}</span>
+        <span className="text-slate"> · {po.supplier}</span>
       </div>
-      <div style={{ color: textMuted, fontSize: 11 }}>
+      <div className="text-slate text-[11px]">
         {po.itemCount} item{po.itemCount !== 1 ? "s" : ""}
         {po.expected_delivery_date && ` · ${po.expected_delivery_date}`}
       </div>
@@ -134,15 +136,15 @@ function POCategorySection({ categoryKey, label, color, items, expandedCategory,
     <div>
       <button
         onClick={() => setExpandedCategory(isOpen ? null : categoryKey)}
-        style={{ width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isOpen ? 6 : 0 }}
+        className={`w-full bg-transparent border-none p-0 cursor-pointer flex items-center justify-between ${isOpen ? "mb-1.5" : "mb-0"}`}
       >
-        <span style={{ fontSize: 11, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: 0.5 }}>
+        <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color }}>
           {label} ({items.length})
         </span>
         {isOpen ? <ChevronUp size={12} color={color} /> : <ChevronDown size={12} color={color} />}
       </button>
       {isOpen && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 180, minHeight: 0, overflowY: "auto" }}>
+        <div className="flex flex-col gap-1.5 max-h-[180px] min-h-0 overflow-y-auto">
           {items.map((po) => (
             <PORow key={po.id} po={po} />
           ))}
@@ -374,71 +376,70 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
   const healthyPct = health.total - health.noPar > 0 ? Math.round((health.healthy / (health.total - health.noPar)) * 100) : null;
 
   return (
-    <div style={{ fontFamily: sans }}>
+    <div className="font-sans">
       {autoPOModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, animation: "backdropFadeIn 0.15s ease-out" }}>
-          <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, width: "100%", maxWidth: 360, animation: "modalPopIn 0.25s ease-out" }}>
-            <div style={{ fontSize: 14, color: textPrimary, lineHeight: 1.5, marginBottom: autoPOModal.tone === "pick-vendor" ? 14 : 16 }}>
-              {autoPOModal.text}
-            </div>
-
-            {autoPOModal.tone === "pick-vendor" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14, maxHeight: 220, overflowY: "auto" }}>
-                {vendorPickerLoading && <div style={{ fontSize: 13, color: textMuted, textAlign: "center", padding: 8 }}>Loading…</div>}
-                {!vendorPickerLoading && vendorPickerList.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => assignSupplierAndCreatePO(s.id)}
-                    style={{ width: "100%", textAlign: "left", background: "#F1F4F8", border: "1px solid #E2E6ED", borderRadius: 8, padding: "10px 12px", color: textPrimary, fontSize: 13, cursor: "pointer" }}
-                  >
-                    {s.name}
-                  </button>
-                ))}
-                {!vendorPickerLoading && vendorPickerList.length === 0 && (
-                  <div style={{ fontSize: 12, color: textMuted, textAlign: "center", padding: 8 }}>No vendors on file yet — add one in Invoices → History.</div>
-                )}
-              </div>
-            )}
-
-            <button
-              onClick={() => setAutoPOModal(null)}
-              style={{ width: "100%", background: autoPOModal.tone === "pick-vendor" ? "none" : accent, border: autoPOModal.tone === "pick-vendor" ? "1px solid #E2E6ED" : "none", borderRadius: 8, padding: "11px", color: autoPOModal.tone === "pick-vendor" ? textMuted : "#FFFFFF", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
-            >
-              {autoPOModal.tone === "pick-vendor" ? "None of these — skip for now" : "OK"}
-            </button>
+        <Modal onClose={() => setAutoPOModal(null)} maxWidth={360}>
+          <div className={`text-sm text-ink leading-normal ${autoPOModal.tone === "pick-vendor" ? "mb-3.5" : "mb-4"}`}>
+            {autoPOModal.text}
           </div>
-        </div>
+
+          {autoPOModal.tone === "pick-vendor" && (
+            <div className="flex flex-col gap-1.5 mb-3.5 max-h-[220px] overflow-y-auto">
+              {vendorPickerLoading && <div className="text-sm text-slate text-center p-2">Loading…</div>}
+              {!vendorPickerLoading && vendorPickerList.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => assignSupplierAndCreatePO(s.id)}
+                  className="w-full text-left bg-surface-alt border border-border rounded-lg px-3 py-2.5 text-ink text-sm cursor-pointer"
+                >
+                  {s.name}
+                </button>
+              ))}
+              {!vendorPickerLoading && vendorPickerList.length === 0 && (
+                <div className="text-xs text-slate text-center p-2">No vendors on file yet — add one in Invoices → History.</div>
+              )}
+            </div>
+          )}
+
+          <Button
+            variant={autoPOModal.tone === "pick-vendor" ? "secondary" : "primary"}
+            onClick={() => setAutoPOModal(null)}
+            className="w-full !text-sm"
+          >
+            {autoPOModal.tone === "pick-vendor" ? "None of these — skip for now" : "OK"}
+          </Button>
+        </Modal>
       )}
-      <div style={{ padding: "24px 20px 8px" }}>
-        <div style={{ fontSize: 12, letterSpacing: 1.5, textTransform: "uppercase", color: textMuted, marginBottom: 4 }}>
+      <div className="pt-6 px-5 pb-2">
+        <div className="text-xs tracking-wide uppercase text-slate mb-1">
           {restaurantName}
         </div>
-        <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.3 }}>
+        <h1 className="text-[26px] font-bold m-0 tracking-tight">
           {loading ? "Loading…" : allClear ? "All clear" : "Needs attention"}
         </h1>
       </div>
 
-      <div style={{ padding: "16px 16px 8px", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="px-4 pt-4 pb-2 flex flex-col gap-2.5">
         {!loading && timeStats.totalCount > 0 && (
-          <div style={{ background: "linear-gradient(135deg, #1E5B8C, #164569)", borderRadius: 10, padding: "18px 18px", color: "#FFFFFF" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, opacity: 0.85 }}>
+          <div className="bg-gradient-to-br from-[#1E5B8C] to-[#164569] rounded-[10px] p-[18px] text-white">
+            <div className="flex items-center gap-2 mb-2 opacity-85">
               <Clock size={15} />
-              <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.3 }}>TIME SAVED</span>
+              <span className="text-xs font-semibold tracking-wide">TIME SAVED</span>
             </div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
-              <span style={{ fontSize: 28, fontWeight: 700, fontFamily: mono }}>
+            <div className="flex items-baseline gap-2 mb-1">
+              <span className="text-[28px] font-bold font-mono">
                 ~{((timeStats.totalCount * 8) / 60).toFixed(1)} hrs
               </span>
-              <span style={{ fontSize: 13, opacity: 0.85 }}>all time</span>
+              <span className="text-sm opacity-85">all time</span>
             </div>
-            <div style={{ fontSize: 12, opacity: 0.85 }}>
+            <div className="text-xs opacity-85">
               {timeStats.totalCount} invoice{timeStats.totalCount !== 1 ? "s" : ""} processed
               {timeStats.monthCount > 0 && ` · ${timeStats.monthCount} this month`}
             </div>
             {wasteStats.count > 0 && (
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.2)" }}>
+              <div className="flex items-center gap-1.5 mt-2.5 pt-2.5 border-t border-white/20">
                 <Leaf size={13} />
-                <span style={{ fontSize: 12, opacity: 0.9 }}>
+                <span className="text-xs opacity-90">
                   ~${wasteStats.value.toFixed(2)} saved from waste ({wasteStats.count} item{wasteStats.count !== 1 ? "s" : ""} used before expiring)
                 </span>
               </div>
@@ -447,26 +448,26 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
         )}
 
         {!loading && allClear && (
-          <div style={{ background: card, border: "1px solid #BFE3D0", borderRadius: 10, padding: "20px 18px", display: "flex", alignItems: "center", gap: 10 }}>
+          <div className="bg-surface border border-good-border rounded-[10px] py-5 px-[18px] flex items-center gap-2.5">
             <CheckCircle2 size={20} color={good} />
-            <div style={{ fontSize: 14, color: textPrimary }}>Nothing waiting on you right now.</div>
+            <div className="text-sm text-ink">Nothing waiting on you right now.</div>
           </div>
         )}
 
         {!loading && stockoutRisks.length > 0 && (
           <div
             onClick={() => onNavigate("digest")}
-            style={{ width: "100%", textAlign: "left", background: "#FDECEC", border: "1px solid #F3B8B8", borderRadius: 10, padding: "16px 18px", color: textPrimary, cursor: "pointer", animation: "bannerSlideIn 0.3s ease-out" }}
+            className="w-full text-left bg-danger-bg border border-danger-border rounded-[10px] py-4 px-[18px] text-ink cursor-pointer animate-banner-slide"
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+            <div className="flex items-center gap-2.5 mb-2">
               <TrendingDown size={18} color={danger} />
-              <div style={{ fontWeight: 700, fontSize: 15, color: danger }}>
+              <div className="font-bold text-[15px]" style={{ color: danger }}>
                 {stockoutRisks.length} item{stockoutRisks.length > 1 ? "s" : ""} may run out before the shipment arrives
               </div>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <div className="flex flex-col gap-1">
               {stockoutRisks.slice(0, 3).map((r) => (
-                <div key={r.inventory_item_id} style={{ fontSize: 12, color: textMuted, fontFamily: mono }}>
+                <div key={r.inventory_item_id} className="text-xs text-slate font-mono">
                   {r.item_name} — projected out {r.projected_stockout_date}, shipment expected {r.expected_delivery_date} ({r.days_short}d short)
                 </div>
               ))}
@@ -477,17 +478,17 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
         {!loading && atRiskItems.length > 0 && (
           <div
             onClick={() => onNavigate("kitchen")}
-            style={{ width: "100%", textAlign: "left", background: "#FFF7ED", border: "1px solid #FBD9A8", borderRadius: 10, padding: "16px 18px", color: textPrimary, cursor: "pointer", animation: "bannerSlideIn 0.3s ease-out" }}
+            className="w-full text-left bg-[#FFF7ED] border border-[#FBD9A8] rounded-[10px] py-4 px-[18px] text-ink cursor-pointer animate-banner-slide"
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+            <div className="flex items-center gap-2.5 mb-2">
               <ChefHat size={18} color="#B45309" />
-              <div style={{ fontWeight: 700, fontSize: 15, color: "#B45309" }}>
+              <div className="font-bold text-[15px] text-[#B45309]">
                 {atRiskItems.length} item{atRiskItems.length > 1 ? "s" : ""} about to expire
               </div>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <div className="flex flex-col gap-1">
               {atRiskItems.slice(0, 3).map((r) => (
-                <div key={r.inventory_item_id} style={{ fontSize: 12, color: textMuted, fontFamily: mono }}>
+                <div key={r.inventory_item_id} className="text-xs text-slate font-mono">
                   {r.name} — {r.days_until_expiration < 0 ? `${Math.abs(r.days_until_expiration)}d overdue` : r.days_until_expiration === 0 ? "today" : `${r.days_until_expiration}d left`}
                 </div>
               ))}
@@ -498,14 +499,14 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
         {!loading && pendingCount > 0 && (
           <button
             onClick={() => onNavigate("invoices")}
-            style={{ width: "100%", textAlign: "left", background: card, border: "1px solid #E2E6ED", borderRadius: 10, padding: "16px 18px", color: textPrimary, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+            className="w-full text-left bg-surface border border-border rounded-[10px] py-4 px-[18px] text-ink cursor-pointer flex justify-between items-center"
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div className="flex items-center gap-2.5">
               <Receipt size={18} color={accent} />
               <div>
-                <div style={{ fontWeight: 600, fontSize: 15 }}>{pendingCount} invoice{pendingCount > 1 ? "s" : ""} to review</div>
+                <div className="font-semibold text-[15px]">{pendingCount} invoice{pendingCount > 1 ? "s" : ""} to review</div>
                 {vendorConfirmCount > 0 && (
-                  <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>
+                  <div className="text-xs text-slate mt-0.5">
                     {vendorConfirmCount} need{vendorConfirmCount === 1 ? "s" : ""} vendor confirmation
                   </div>
                 )}
@@ -518,54 +519,54 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
         {!loading && belowParCount > 0 && (
           <button
             onClick={() => onNavigate("digest")}
-            style={{ width: "100%", textAlign: "left", background: card, border: "1px solid #E2E6ED", borderRadius: 10, padding: "16px 18px", color: textPrimary, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+            className="w-full text-left bg-surface border border-border rounded-[10px] py-4 px-[18px] text-ink cursor-pointer flex justify-between items-center"
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div className="flex items-center gap-2.5">
               <ClipboardList size={18} color={accent} />
-              <div style={{ fontWeight: 600, fontSize: 15 }}>{belowParCount} item{belowParCount > 1 ? "s" : ""} below par</div>
+              <div className="font-semibold text-[15px]">{belowParCount} item{belowParCount > 1 ? "s" : ""} below par</div>
             </div>
             <AlertTriangle size={14} color={accent} />
           </button>
         )}
 
         {!loading && health.total > 0 && (
-          <div style={{ background: card, border: "1px solid #E2E6ED", borderRadius: 10, padding: "16px 18px" }}>
+          <div className="bg-surface border border-border rounded-[10px] py-4 px-[18px]">
             <button
               onClick={() => {
                 setShowHealthDetail((s) => !s);
                 setExpandedCategory(null);
               }}
-              style={{ width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}
+              className="w-full bg-transparent border-none p-0 cursor-pointer flex items-center justify-between mb-2.5"
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div className="flex items-center gap-2">
                 <Activity size={16} color={textMuted} />
-                <span style={{ fontSize: 13, fontWeight: 600, color: textPrimary }}>Inventory health</span>
+                <span className="text-sm font-semibold text-ink">Inventory health</span>
                 {showHealthDetail ? <ChevronUp size={14} color={textMuted} /> : <ChevronDown size={14} color={textMuted} />}
               </div>
               {healthyPct != null && (
-                <span style={{ fontSize: 13, fontFamily: mono, color: healthyPct >= 70 ? good : healthyPct >= 40 ? accent : danger }}>
+                <span className="text-sm font-mono" style={{ color: healthyPct >= 70 ? good : healthyPct >= 40 ? accent : danger }}>
                   {healthyPct}% healthy
                 </span>
               )}
             </button>
 
             {/* Segmented bar: healthy / below par / untracked */}
-            <div style={{ display: "flex", width: "100%", height: 8, borderRadius: 4, overflow: "hidden", marginBottom: 10 }}>
+            <div className="flex w-full h-2 rounded overflow-hidden mb-2.5">
               {health.healthy > 0 && <div style={{ flex: health.healthy, background: good }} />}
               {health.belowPar > 0 && <div style={{ flex: health.belowPar, background: danger }} />}
-              {health.noPar > 0 && <div style={{ flex: health.noPar, background: "#D6DCE5" }} />}
+              {health.noPar > 0 && <div className="bg-border-strong" style={{ flex: health.noPar }} />}
             </div>
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, fontSize: 12, color: textMuted }}>
-              <span><span style={{ color: good, fontFamily: mono }}>{health.healthy}</span> healthy</span>
-              <span><span style={{ color: danger, fontFamily: mono }}>{health.belowPar}</span> below par</span>
+            <div className="flex flex-wrap gap-3 text-xs text-slate">
+              <span><span className="font-mono" style={{ color: good }}>{health.healthy}</span> healthy</span>
+              <span><span className="font-mono" style={{ color: danger }}>{health.belowPar}</span> below par</span>
               {health.noPar > 0 && (
-                <span><span style={{ color: textMuted, fontFamily: mono }}>{health.noPar}</span> not tracked (no par level set)</span>
+                <span><span className="text-slate font-mono">{health.noPar}</span> not tracked (no par level set)</span>
               )}
             </div>
 
             {showHealthDetail && (
-              <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #E2E6ED", display: "flex", flexDirection: "column", gap: 12 }}>
+              <div className="mt-3.5 pt-3.5 border-t border-border flex flex-col gap-3">
                 <HealthCategorySection
                   categoryKey="belowPar"
                   label="Below par"
@@ -605,37 +606,37 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
         )}
 
         {!loading && poSummary.total > 0 && (
-          <div style={{ background: card, border: "1px solid #E2E6ED", borderRadius: 10, padding: "16px 18px" }}>
+          <div className="bg-surface border border-border rounded-[10px] py-4 px-[18px]">
             <button
               onClick={() => {
                 setShowPODetail((s) => !s);
                 setExpandedPOCategory(null);
               }}
-              style={{ width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}
+              className="w-full bg-transparent border-none p-0 cursor-pointer flex items-center justify-between mb-2.5"
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div className="flex items-center gap-2">
                 <Package size={16} color={textMuted} />
-                <span style={{ fontSize: 13, fontWeight: 600, color: textPrimary }}>Purchase orders</span>
+                <span className="text-sm font-semibold text-ink">Purchase orders</span>
                 {showPODetail ? <ChevronUp size={14} color={textMuted} /> : <ChevronDown size={14} color={textMuted} />}
               </div>
-              <span style={{ fontSize: 13, fontFamily: mono, color: textMuted }}>{poSummary.total} total</span>
+              <span className="text-sm font-mono text-slate">{poSummary.total} total</span>
             </button>
 
             {/* Segmented bar: open / partial / fulfilled */}
-            <div style={{ display: "flex", width: "100%", height: 8, borderRadius: 4, overflow: "hidden", marginBottom: 10 }}>
+            <div className="flex w-full h-2 rounded overflow-hidden mb-2.5">
               {poSummary.openPOs.length > 0 && <div style={{ flex: poSummary.openPOs.length, background: accent }} />}
               {poSummary.partialPOs.length > 0 && <div style={{ flex: poSummary.partialPOs.length, background: "#D97706" }} />}
               {poSummary.fulfilledPOs.length > 0 && <div style={{ flex: poSummary.fulfilledPOs.length, background: good }} />}
             </div>
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, fontSize: 12, color: textMuted }}>
-              <span><span style={{ color: accent, fontFamily: mono }}>{poSummary.openPOs.length}</span> open</span>
-              <span><span style={{ color: "#D97706", fontFamily: mono }}>{poSummary.partialPOs.length}</span> partial</span>
-              <span><span style={{ color: good, fontFamily: mono }}>{poSummary.fulfilledPOs.length}</span> fulfilled</span>
+            <div className="flex flex-wrap gap-3 text-xs text-slate">
+              <span><span className="font-mono" style={{ color: accent }}>{poSummary.openPOs.length}</span> open</span>
+              <span><span className="font-mono text-[#D97706]">{poSummary.partialPOs.length}</span> partial</span>
+              <span><span className="font-mono" style={{ color: good }}>{poSummary.fulfilledPOs.length}</span> fulfilled</span>
             </div>
 
             {showPODetail && (
-              <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #E2E6ED", display: "flex", flexDirection: "column", gap: 12 }}>
+              <div className="mt-3.5 pt-3.5 border-t border-border flex flex-col gap-3">
                 <POCategorySection categoryKey="open" label="Open" color={accent} items={poSummary.openPOs} expandedCategory={expandedPOCategory} setExpandedCategory={setExpandedPOCategory} />
                 <POCategorySection categoryKey="partial" label="Partial" color="#D97706" items={poSummary.partialPOs} expandedCategory={expandedPOCategory} setExpandedCategory={setExpandedPOCategory} />
                 <POCategorySection categoryKey="fulfilled" label="Fulfilled" color={good} items={poSummary.fulfilledPOs} expandedCategory={expandedPOCategory} setExpandedCategory={setExpandedPOCategory} />
@@ -646,15 +647,15 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
 
         <button
           onClick={() => onNavigate("capture")}
-          style={{ width: "100%", textAlign: "left", background: "none", border: "1px dashed #E2E6ED", borderRadius: 10, padding: "16px 18px", color: textMuted, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}
+          className="w-full text-left bg-transparent border border-dashed border-border rounded-[10px] py-4 px-[18px] text-slate cursor-pointer flex items-center gap-2.5 mt-1.5"
         >
           <Camera size={18} />
-          <div style={{ fontSize: 14 }}>Upload a new invoice</div>
+          <div className="text-sm">Upload a new invoice</div>
         </button>
 
         <button
           onClick={() => supabase.auth.signOut()}
-          style={{ width: "100%", textAlign: "center", background: "none", border: "none", padding: "16px 18px", color: textMuted, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 16, fontSize: 13 }}
+          className="w-full text-center bg-transparent border-none py-4 px-[18px] text-slate cursor-pointer flex items-center justify-center gap-2 mt-4 text-sm"
         >
           <LogOut size={14} />
           Sign out
@@ -662,22 +663,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
 
         <button
           onClick={() => setShowAskAgent(true)}
-          style={{
-            position: "fixed",
-            bottom: 84,
-            right: 20,
-            width: 56,
-            height: 56,
-            borderRadius: "50%",
-            background: accent,
-            border: "none",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            boxShadow: "0 4px 14px rgba(30,91,140,0.4)",
-            zIndex: 500,
-          }}
+          className="fixed bottom-[84px] right-5 w-14 h-14 rounded-full bg-accent border-none flex items-center justify-center cursor-pointer shadow-[0_4px_14px_rgba(30,91,140,0.4)] z-[500]"
           aria-label="Ask about your business"
         >
           <Sparkles size={22} color="#FFFFFF" />
