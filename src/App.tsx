@@ -5,6 +5,7 @@ import CaptureScreen from "./screens/CaptureScreen";
 import InvoicesScreen from "./screens/InvoicesScreen";
 import DigestScreen from "./screens/DigestScreen";
 import KitchenScreen from "./screens/KitchenScreen";
+import SplashScreen from "./screens/SplashScreen";
 import LoginScreen from "./screens/LoginScreen";
 import OnboardingScreen from "./screens/OnboardingScreen";
 import { useAuth } from "./lib/AuthContext";
@@ -73,7 +74,7 @@ export default function App() {
   const { toasts, dismissToast } = useNotifications(restaurantId);
 
   if (loading) {
-    return <div style={{ background: bg, minHeight: "100vh", color: textMuted, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: sans }}>Loading…</div>;
+    return <SplashScreen />;
   }
 
   if (!session) {
