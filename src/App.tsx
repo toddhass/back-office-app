@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Camera, Receipt, ClipboardList, LogOut, Home, ChevronDown, ChefHat } from "lucide-react";
 import HomeScreen from "./screens/HomeScreen";
 import CaptureScreen from "./screens/CaptureScreen";
@@ -11,6 +11,7 @@ import { useAuth } from "./lib/AuthContext";
 import { supabase } from "./lib/supabaseClient";
 import { useIsDesktop } from "./lib/useIsDesktop";
 import { useNotifications } from "./lib/useNotifications";
+import { checkForNewVersion } from "./lib/versionCheck";
 import { bg, sans, textMuted, accent, card, textPrimary, border } from "./lib/tokens";
 
 function RestaurantSwitcher({ restaurants, restaurantId, restaurantName, onSwitch, style }) {
@@ -71,6 +72,14 @@ export default function App() {
   const [tab, setTab] = useState("home");
   const isDesktop = useIsDesktop();
   const { toasts, dismissToast } = useNotifications(restaurantId);
+
+  // Runs once when the app loads - covers both a fresh visit and right
+  // after login, since both happen within this same mount. Recovers
+  // automatically from a stale bundle instead of needing a manual hard
+  // refresh, which didn't reliably work for a real caching issue once.
+  useEffect(() => {
+    checkForNewVersion();
+  }, []);
 
   if (loading) {
     return <div style={{ background: bg, minHeight: "100vh", color: textMuted, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: sans }}>Loading…</div>;
