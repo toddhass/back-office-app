@@ -3,8 +3,60 @@ import { Check, ChevronLeft, ChevronRight, Camera, AlertTriangle, Plus, ArrowLef
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { bg, card, textPrimary, textMuted, accent, danger, good, mono } from "../lib/tokens";
+import type { Tables } from "../lib/database.types";
+import type { ReopenInvoiceResult } from "../lib/rpc-types";
 
-function ConfidenceBar({ score }) {
+type InvoiceRow = Tables<"invoices">;
+type LineItemRow = Tables<"invoice_line_items">;
+type SupplierRow = Tables<"suppliers">;
+type InventoryItemRow = Tables<"inventory_items">;
+
+interface PendingInvoice extends InvoiceRow {
+  suppliers: { name: string } | null;
+  needsReviewCount: number;
+  needsVendorConfirm: boolean;
+}
+
+// _createdNew: client-only flag for a line item resolved by creating a
+// brand-new inventory item during review, not yet matched to an existing
+// one - never persisted, purely local UI state.
+interface ReviewLineItem extends LineItemRow {
+  _createdNew?: boolean;
+}
+
+interface InvoiceDetail extends InvoiceRow {
+  suppliers: { name: string } | null;
+}
+
+interface HistoryInvoice extends InvoiceRow {
+  suppliers: { name: string } | null;
+}
+
+interface EditingEntity {
+  type: "supplier" | "item";
+  id: string;
+  name: string;
+}
+
+interface DeleteCheck {
+  checking: boolean;
+  blockedReason: string | null;
+}
+
+type ViewName = "queue" | "detail" | "history" | "historyDetail";
+
+// raw_extraction is genuinely unstructured jsonb (whatever the extraction
+// function returned) - no fixed schema Postgres could describe. This reads
+// just the two fields this screen uses, without pretending the whole shape
+// is known.
+function getRawExtractionField(rawExtraction: unknown, field: string): unknown {
+  if (rawExtraction && typeof rawExtraction === "object" && field in rawExtraction) {
+    return (rawExtraction as Record<string, unknown>)[field];
+  }
+  return undefined;
+}
+
+function ConfidenceBar({ score }: { score: number }) {
   const pct = Math.round(score * 100);
   const color = score >= 0.85 ? good : score >= 0.5 ? accent : danger;
   return (
@@ -28,21 +80,21 @@ function TicketDivider() {
 }
 
 export default function InvoicesScreen() {
-  const { restaurantId: RESTAURANT_ID } = useAuth();
+  const { restaurantId: RESTAURANT_ID, session } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [historyList, setHistoryList] = useState([]);
-  const [historyDetail, setHistoryDetail] = useState(null); // { invoice, lineItems }
+  const [historyList, setHistoryList] = useState<HistoryInvoice[]>([]);
+  const [historyDetail, setHistoryDetail] = useState<{ invoice: HistoryInvoice; lineItems: (LineItemRow & { inventory_items: { name: string } | null })[] } | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [suppliersList, setSuppliersList] = useState([]);
+  const [suppliersList, setSuppliersList] = useState<Pick<SupplierRow, "id" | "name" | "phone">[]>([]);
   const [showAddVendor, setShowAddVendor] = useState(false);
   const [newVendorName, setNewVendorName] = useState("");
   const [addingVendor, setAddingVendor] = useState(false);
   const [addVendorError, setAddVendorError] = useState("");
-  const [vendorSelection, setVendorSelection] = useState(null); // candidate id, or 'new'
+  const [vendorSelection, setVendorSelection] = useState<string | null>(null); // candidate id, or 'new'
   const [showNewVendorConfirm, setShowNewVendorConfirm] = useState(false);
   const [newVendorConfirmName, setNewVendorConfirmName] = useState("");
   const [confirmingVendor, setConfirmingVendor] = useState(false);
-  const [itemsList, setItemsList] = useState([]);
+  const [itemsList, setItemsList] = useState<Pick<InventoryItemRow, "id" | "name" | "unit" | "par_level" | "sku">[]>([]);
   const [showAddItem, setShowAddItem] = useState(false);
   const [newItemFormName, setNewItemFormName] = useState("");
   const [newItemFormUnit, setNewItemFormUnit] = useState("lb");
@@ -53,23 +105,23 @@ export default function InvoicesScreen() {
   const [addItemError, setAddItemError] = useState("");
   const [showVendorsList, setShowVendorsList] = useState(false);
   const [showItemsList, setShowItemsList] = useState(false);
-  const [editingEntity, setEditingEntity] = useState(null); // { type: 'supplier'|'item', id, name }
+  const [editingEntity, setEditingEntity] = useState<EditingEntity | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [editShelfLife, setEditShelfLife] = useState("");
-  const [deleteCheck, setDeleteCheck] = useState({ checking: false, blockedReason: null });
+  const [deleteCheck, setDeleteCheck] = useState<DeleteCheck>({ checking: false, blockedReason: null });
   const [savingEdit, setSavingEdit] = useState(false);
   const [reopening, setReopening] = useState(false);
   const [reopenConfirming, setReopenConfirming] = useState(false);
-  const [reopenSummary, setReopenSummary] = useState(null);
+  const [reopenSummary, setReopenSummary] = useState<ReopenInvoiceResult | null>(null);
   const [reopenError, setReopenError] = useState("");
-  const [invoice, setInvoice] = useState(null);
-  const [lineItems, setLineItems] = useState([]);
-  const [pendingList, setPendingList] = useState([]);
-  const [view, setView] = useState("queue");
+  const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
+  const [lineItems, setLineItems] = useState<ReviewLineItem[]>([]);
+  const [pendingList, setPendingList] = useState<PendingInvoice[]>([]);
+  const [view, setView] = useState<ViewName>("queue");
   const [cardIndex, setCardIndex] = useState(0);
   const [newItemName, setNewItemName] = useState("");
   const [showNewForm, setShowNewForm] = useState(false);
-  const [invoicePhotoUrl, setInvoicePhotoUrl] = useState(null);
+  const [invoicePhotoUrl, setInvoicePhotoUrl] = useState<string | null>(null);
   const [showInvoicePhoto, setShowInvoicePhoto] = useState(false);
   const [editingQty, setEditingQty] = useState(false);
   const [historySearch, setHistorySearch] = useState("");
@@ -97,7 +149,7 @@ export default function InvoicesScreen() {
       .select("invoice_id, needs_review")
       .in("invoice_id", ids);
 
-    const counts = {};
+    const counts: Record<string, number> = {};
     (allItems || []).forEach((li) => {
       if (li.needs_review) counts[li.invoice_id] = (counts[li.invoice_id] || 0) + 1;
     });
@@ -112,7 +164,7 @@ export default function InvoicesScreen() {
     setLoading(false);
   }
 
-  async function loadInvoiceDetail(invId) {
+  async function loadInvoiceDetail(invId: string) {
     setLoading(true);
     const { data: inv } = await supabase
       .from("invoices")
@@ -147,10 +199,10 @@ export default function InvoicesScreen() {
     }
   }
 
-  async function updateLineItemValue(itemId, field, value) {
+  async function updateLineItemValue(itemId: string, field: "quantity" | "unit_price", value: string) {
     const numValue = parseFloat(value);
     if (isNaN(numValue)) return;
-    const updated = { [field]: numValue };
+    const updated: Partial<LineItemRow> = { [field]: numValue };
     // Keep line_total consistent if the user corrects quantity or unit price
     const item = lineItems.find((i) => i.id === itemId);
     if (item) {
@@ -176,7 +228,7 @@ export default function InvoicesScreen() {
     setHistoryLoading(false);
   }
 
-  async function loadHistoryDetail(inv) {
+  async function loadHistoryDetail(inv: HistoryInvoice) {
     setHistoryLoading(true);
     const { data: items } = await supabase
       .from("invoice_line_items")
@@ -208,7 +260,7 @@ export default function InvoicesScreen() {
   }
 
   async function addItem() {
-    if (!newItemFormName.trim()) return;
+    if (!newItemFormName.trim() || !RESTAURANT_ID) return;
     setAddingItem(true);
     setAddItemError("");
 
@@ -245,19 +297,19 @@ export default function InvoicesScreen() {
     setAddingItem(false);
   }
 
-  async function reopenInvoice(invoiceId) {
+  async function reopenInvoice(invoiceId: string) {
     setReopening(true);
     setReopenError("");
     const { data, error } = await supabase.rpc("reopen_invoice_for_correction", { p_invoice_id: invoiceId });
     if (error) {
       setReopenError(error.message);
     } else {
-      setReopenSummary(data);
+      setReopenSummary(data as ReopenInvoiceResult);
     }
     setReopenConfirming(false);
     setReopening(false);
   }
-  async function openEditPanel(type, id, name) {
+  async function openEditPanel(type: "supplier" | "item", id: string, name: string) {
     setEditingEntity({ type, id, name });
     setRenameValue(name);
     setDeleteCheck({ checking: true, blockedReason: null });
@@ -297,12 +349,13 @@ export default function InvoicesScreen() {
   async function saveRename() {
     if (!editingEntity || !renameValue.trim()) return;
     setSavingEdit(true);
-    const table = editingEntity.type === "supplier" ? "suppliers" : "inventory_items";
-    const updatePayload = { name: renameValue.trim() };
-    if (editingEntity.type === "item") {
-      updatePayload.shelf_life_days = editShelfLife ? Number(editShelfLife) : null;
+    let error;
+    if (editingEntity.type === "supplier") {
+      ({ error } = await supabase.from("suppliers").update({ name: renameValue.trim() }).eq("id", editingEntity.id));
+    } else {
+      const shelfLife = editShelfLife ? Number(editShelfLife) : null;
+      ({ error } = await supabase.from("inventory_items").update({ name: renameValue.trim(), shelf_life_days: shelfLife }).eq("id", editingEntity.id));
     }
-    const { error } = await supabase.from(table).update(updatePayload).eq("id", editingEntity.id);
     if (!error) {
       setEditingEntity(null);
       if (editingEntity.type === "supplier") loadSuppliers();
@@ -325,7 +378,7 @@ export default function InvoicesScreen() {
   }
 
   async function addVendor() {
-    if (!newVendorName.trim()) return;
+    if (!newVendorName.trim() || !RESTAURANT_ID) return;
     setAddingVendor(true);
     setAddVendorError("");
 
@@ -358,14 +411,15 @@ export default function InvoicesScreen() {
     setAddingVendor(false);
   }
 
-  async function confirmVendorMatch(candidateId) {
+  async function confirmVendorMatch(candidateId: string) {
+    if (!invoice) return;
     setConfirmingVendor(true);
     const { error } = await supabase
       .from("invoices")
       .update({ supplier_id: candidateId })
       .eq("id", invoice.id);
     if (!error) {
-      setInvoice((prev) => ({ ...prev, supplier_id: candidateId }));
+      setInvoice((prev) => (prev ? { ...prev, supplier_id: candidateId } : prev));
       loadInvoiceDetail(invoice.id);
     }
     setConfirmingVendor(false);
@@ -373,6 +427,7 @@ export default function InvoicesScreen() {
 
   async function confirmNewVendorFromInvoice() {
     if (!newVendorConfirmName.trim()) return;
+    if (!invoice || !RESTAURANT_ID) { setConfirmingVendor(false); return; }
     setConfirmingVendor(true);
 
     const { data: created, error: createError } = await supabase
@@ -383,7 +438,7 @@ export default function InvoicesScreen() {
 
     if (!createError && created) {
       await supabase.from("invoices").update({ supplier_id: created.id }).eq("id", invoice.id);
-      setInvoice((prev) => ({ ...prev, supplier_id: created.id }));
+      setInvoice((prev) => (prev ? { ...prev, supplier_id: created.id } : prev));
       setVendorPhone("");
       loadSuppliers();
               loadItems();
@@ -417,7 +472,7 @@ export default function InvoicesScreen() {
         if (viewRef.current === "queue") loadPendingList();
         else if (viewRef.current === "history") loadHistory();
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "invoice_line_items" }, (payload) => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "invoice_line_items" }, (payload: { new?: { invoice_id?: string } }) => {
         const currentInvoiceId = invoiceRef.current?.id;
         if (viewRef.current === "detail" && currentInvoiceId && payload.new?.invoice_id === currentInvoiceId) {
           loadInvoiceDetail(currentInvoiceId);
@@ -427,24 +482,31 @@ export default function InvoicesScreen() {
       .on("postgres_changes", { event: "*", schema: "public", table: "inventory_items", filter: `restaurant_id=eq.${RESTAURANT_ID}` }, () => loadItems())
       .subscribe();
 
-    return () => supabase.removeChannel(channel);
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [RESTAURANT_ID]);
 
   const reviewItems = lineItems.filter((i) => i.needs_review);
   const allResolved = reviewItems.every((i) => i.inventory_item_id || i._createdNew);
   const currentItem = reviewItems[cardIndex];
 
-  async function selectCandidate(itemId, candidateId) {
+  async function selectCandidate(itemId: string, candidateId: string) {
     const item = lineItems.find((i) => i.id === itemId);
+    if (!item || !RESTAURANT_ID) return;
 
     // Same open-PO short-shipment check the automatic matcher runs -
-    // a manually confirmed match deserves the same protection.
-    const { data: shortNote } = await supabase.rpc("check_short_shipment", {
-      p_supplier_id: invoice?.supplier_id || null,
-      p_inventory_item_id: candidateId,
-      p_invoice_qty: item?.quantity || 0,
-      p_invoice_line_item_id: itemId,
-    });
+    // a manually confirmed match deserves the same protection. Skipped
+    // entirely when the vendor isn't confirmed yet - there's no open PO
+    // to check against without knowing who the item came from.
+    const { data: shortNote } = invoice?.supplier_id
+      ? await supabase.rpc("check_short_shipment", {
+          p_supplier_id: invoice.supplier_id,
+          p_inventory_item_id: candidateId,
+          p_invoice_qty: item?.quantity || 0,
+          p_invoice_line_item_id: itemId,
+        })
+      : { data: null };
 
     const { error } = await supabase
       .from("invoice_line_items")
@@ -483,7 +545,7 @@ export default function InvoicesScreen() {
   }
 
   async function createNewItem() {
-    if (!currentItem || !newItemName) return;
+    if (!currentItem || !newItemName || !RESTAURANT_ID) return;
     const { data: created, error } = await supabase
       .from("inventory_items")
       .insert({
@@ -503,12 +565,14 @@ export default function InvoicesScreen() {
       // isn't possible), so this is really just for consistency/symmetry
       // with selectCandidate; in practice this will almost always be null
       // for a newly created item since no PO could reference it yet.
-      const { data: shortNote } = await supabase.rpc("check_short_shipment", {
-        p_supplier_id: invoice?.supplier_id || null,
-        p_inventory_item_id: created.id,
-        p_invoice_qty: currentItem.quantity || 0,
-        p_invoice_line_item_id: currentItem.id,
-      });
+      const { data: shortNote } = invoice?.supplier_id
+        ? await supabase.rpc("check_short_shipment", {
+            p_supplier_id: invoice.supplier_id,
+            p_inventory_item_id: created.id,
+            p_invoice_qty: currentItem.quantity || 0,
+            p_invoice_line_item_id: currentItem.id,
+          })
+        : { data: null };
 
       await supabase
         .from("invoice_line_items")
@@ -541,6 +605,7 @@ export default function InvoicesScreen() {
   }
 
   async function postToInventory() {
+    if (!invoice) return;
     // Bump stock for every matched line item, then close out the invoice
     for (const item of lineItems) {
       if (!item.inventory_item_id) continue;
@@ -558,7 +623,7 @@ export default function InvoicesScreen() {
         .eq("id", item.inventory_item_id);
       await supabase.from("stock_transactions").insert({
         inventory_item_id: item.inventory_item_id,
-        change: item.quantity,
+        change: item.quantity || 0,
         source: "invoice",
         reference_id: invoice.id,
       });
@@ -831,7 +896,7 @@ export default function InvoicesScreen() {
                 <div style={{ color: textMuted, fontSize: 12, marginTop: 2 }}>
                   {inv.invoice_date}
                   {" · "}
-                  {new Date(inv.confirmed_at || inv.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                  {new Date(inv.confirmed_at || inv.created_at || Date.now()).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                   {inv.confirmed_by_email && ` · ${inv.confirmed_by_email}`}
                 </div>
               </div>
@@ -1111,8 +1176,8 @@ export default function InvoicesScreen() {
   }
 
   if (!invoice.supplier_id) {
-    const rawName = invoice.raw_extraction?.supplier_name || "Unknown";
-    const candidates = invoice.raw_extraction?.supplier_candidates || [];
+    const rawName = (getRawExtractionField(invoice.raw_extraction, "supplier_name") as string | undefined) || "Unknown";
+    const candidates = (getRawExtractionField(invoice.raw_extraction, "supplier_candidates") as { id: string; name: string }[] | undefined) || [];
     return (
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "20px 16px 8px" }}>
@@ -1206,7 +1271,7 @@ export default function InvoicesScreen() {
 
           {candidates.length > 0 && (
             <button
-              onClick={() => confirmVendorMatch(vendorSelection)}
+              onClick={() => vendorSelection && confirmVendorMatch(vendorSelection)}
               disabled={!vendorSelection || confirmingVendor}
               style={{
                 width: "100%",
@@ -1292,7 +1357,7 @@ export default function InvoicesScreen() {
               <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center" }}>
                 <input
                   type="number"
-                  defaultValue={currentItem.quantity}
+                  defaultValue={currentItem.quantity ?? ""}
                   onBlur={(e) => updateLineItemValue(currentItem.id, "quantity", e.target.value)}
                   style={{ width: 60, background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 6, padding: "6px 8px", color: textPrimary, fontSize: 13 }}
                 />
@@ -1300,7 +1365,7 @@ export default function InvoicesScreen() {
                 <input
                   type="number"
                   step="0.01"
-                  defaultValue={currentItem.unit_price}
+                  defaultValue={currentItem.unit_price ?? ""}
                   onBlur={(e) => updateLineItemValue(currentItem.id, "unit_price", e.target.value)}
                   style={{ width: 70, background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 6, padding: "6px 8px", color: textPrimary, fontSize: 13 }}
                 />
@@ -1314,11 +1379,17 @@ export default function InvoicesScreen() {
               Is this
             </div>
 
-            {(currentItem.match_candidates || []).length === 0 ? (
+            {(() => {
+              // match_candidates is jsonb (an array of AI-suggested matches
+              // with a confidence score) - genuinely unstructured from
+              // Postgres's point of view, cast here to the real shape this
+              // screen has always expected from the matching function.
+              const matchCandidates = (currentItem.match_candidates || []) as { id: string; name: string; score: number }[];
+              return matchCandidates.length === 0 ? (
               <div style={{ fontSize: 13, color: textMuted, marginBottom: 12 }}>No close match found — likely a new item.</div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {currentItem.match_candidates.map((c) => (
+                {matchCandidates.map((c) => (
                   <label
                     key={c.id}
                     style={{
@@ -1347,7 +1418,8 @@ export default function InvoicesScreen() {
                   </label>
                 ))}
               </div>
-            )}
+              );
+            })()}
 
             {!showNewForm ? (
               <button
