@@ -26,6 +26,16 @@ export default {
         sans: ["Inter", "-apple-system", "sans-serif"],
         mono: ["IBM Plex Mono", "monospace"],
       },
+      // References keyframes already defined globally in index.css (used
+      // by every existing inline-style modal/banner) - not redefined here,
+      // so both styling approaches share literally the same motion, not
+      // just visually similar timings.
+      animation: {
+        "backdrop-fade": "backdropFadeIn 0.15s ease-out",
+        "modal-pop": "modalPopIn 0.25s ease-out",
+        "banner-slide": "bannerSlideIn 0.25s ease-out",
+        spin: "spin 1s linear infinite",
+      },
     },
   },
   plugins: [],
