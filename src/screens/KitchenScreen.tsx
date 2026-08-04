@@ -3,14 +3,18 @@ import { AlertTriangle, CheckCircle2, ChefHat } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, mono, sans } from "../lib/tokens";
+import type { Database } from "../lib/database.types";
+import type { MarkUsedResult } from "../lib/rpc-types";
+
+type AtRiskItem = Database["public"]["Functions"]["at_risk_items"]["Returns"][number];
 
 export default function KitchenScreen() {
   const { restaurantId: RESTAURANT_ID, session } = useAuth();
-  const [items, setItems] = useState([]);
+  const [items, setItems] = useState<AtRiskItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [markingId, setMarkingId] = useState(null);
-  const [qtyInputs, setQtyInputs] = useState({});
-  const [confirmedMsg, setConfirmedMsg] = useState(null);
+  const [markingId, setMarkingId] = useState<string | null>(null);
+  const [qtyInputs, setQtyInputs] = useState<Record<string, number | string>>({});
+  const [confirmedMsg, setConfirmedMsg] = useState<string | null>(null);
 
   useEffect(() => {
     load();
@@ -22,7 +26,9 @@ export default function KitchenScreen() {
       .channel(`kitchen-${RESTAURANT_ID}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "inventory_items", filter: `restaurant_id=eq.${RESTAURANT_ID}` }, () => load())
       .subscribe();
-    return () => supabase.removeChannel(channel);
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [RESTAURANT_ID]);
 
   async function load() {
@@ -30,22 +36,23 @@ export default function KitchenScreen() {
     setLoading(true);
     const { data } = await supabase.rpc("at_risk_items", { p_restaurant_id: RESTAURANT_ID });
     setItems(data || []);
-    const defaults = {};
+    const defaults: Record<string, number> = {};
     (data || []).forEach((i) => { defaults[i.inventory_item_id] = i.current_stock; });
     setQtyInputs((prev) => ({ ...defaults, ...prev }));
     setLoading(false);
   }
 
-  async function markUsed(item) {
+  async function markUsed(item: AtRiskItem) {
     setMarkingId(item.inventory_item_id);
     const qty = Number(qtyInputs[item.inventory_item_id]) || item.current_stock;
     const { data: result } = await supabase.rpc("mark_item_used_before_waste", {
       p_inventory_item_id: item.inventory_item_id,
       p_quantity: qty,
-      p_marked_by_email: session?.user?.email || null,
+      p_marked_by_email: session?.user?.email ?? undefined,
     });
-    if (result?.logged) {
-      setConfirmedMsg(`Marked ${result.quantity} ${result.unit} of ${result.item_name} used${result.estimated_value ? ` — ~$${result.estimated_value} saved from waste` : ""}.`);
+    const typedResult = result as MarkUsedResult | null;
+    if (typedResult?.logged) {
+      setConfirmedMsg(`Marked ${typedResult.quantity} ${typedResult.unit} of ${typedResult.item_name} used${typedResult.estimated_value ? ` — ~$${typedResult.estimated_value} saved from waste` : ""}.`);
       setTimeout(() => setConfirmedMsg(null), 5000);
     }
     setMarkingId(null);

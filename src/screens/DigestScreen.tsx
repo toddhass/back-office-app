@@ -3,15 +3,45 @@ import { AlertTriangle, Copy, Check, ChevronDown, ChevronUp, Send, Pencil, Messa
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, mono } from "../lib/tokens";
+import type { AutoCreatePOResult, CreatePOWithSupplierResult } from "../lib/rpc-types";
 
-function suggestQty(item) {
+interface DigestItem {
+  id: string;
+  name: string;
+  unit: string;
+  current_stock: number;
+  par_level: number;
+}
+
+interface SupplierGroup {
+  supplier: string;
+  items: DigestItem[];
+  phone: string | null;
+  supplierId: string | null;
+  justSent?: boolean;
+}
+
+interface AutoPOModalState {
+  tone: "success" | "info" | "pick-vendor";
+  text: string;
+  itemId?: string;
+}
+
+interface ConfirmedPO {
+  po_number: string | null;
+  expected_delivery_date: string | null;
+  supplier: string;
+  items: { name: string; qty: number; unit: string }[];
+}
+
+function suggestQty(item: DigestItem): number {
   // Floor of 1: an item exactly AT par still counts as "below par" (<=)
   // throughout the app, but ordering 0 units is useless. Same fix already
   // applied to the SQL-side auto-PO functions - this was the one place it
   // got missed, and it produced two real 0-quantity POs before being caught.
   return Math.max(1, Math.ceil(item.par_level - item.current_stock));
 }
-function draftMessage(supplierName, items) {
+function draftMessage(supplierName: string, items: DigestItem[]): string {
   const lines = items.map((i) => `${suggestQty(i)} ${i.unit}${suggestQty(i) > 1 ? "s" : ""} ${i.name.split(",")[0]}`);
   return `Hi ${supplierName.split(" ")[0]} team — could we get:\n${lines.map((l) => `• ${l}`).join("\n")}\nThanks!`;
 }
@@ -19,18 +49,18 @@ function draftMessage(supplierName, items) {
 export default function DigestScreen() {
   const { restaurantId: RESTAURANT_ID } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [groups, setGroups] = useState([]); // [{ supplier, items }]
-  const [expanded, setExpanded] = useState({});
-  const [drafts, setDrafts] = useState({});
-  const [copied, setCopied] = useState(null);
-  const [sent, setSent] = useState({});
-  const [expectedDates, setExpectedDates] = useState({});
-  const [editingParId, setEditingParId] = useState(null);
-  const [sentError, setSentError] = useState({});
-  const [autoPOModal, setAutoPOModal] = useState(null);
-  const [vendorPickerList, setVendorPickerList] = useState([]);
+  const [groups, setGroups] = useState<SupplierGroup[]>([]);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [copied, setCopied] = useState<string | null>(null);
+  const [sent, setSent] = useState<Record<string, boolean>>({});
+  const [expectedDates, setExpectedDates] = useState<Record<string, string>>({});
+  const [editingParId, setEditingParId] = useState<string | null>(null);
+  const [sentError, setSentError] = useState<Record<string, string>>({});
+  const [autoPOModal, setAutoPOModal] = useState<AutoPOModalState | null>(null);
+  const [vendorPickerList, setVendorPickerList] = useState<{ id: string; name: string }[]>([]);
   const [vendorPickerLoading, setVendorPickerLoading] = useState(false);
-  const [confirmedPOs, setConfirmedPOs] = useState({});
+  const [confirmedPOs, setConfirmedPOs] = useState<Record<string, ConfirmedPO>>({});
 
   useEffect(() => {
     load();
@@ -47,7 +77,9 @@ export default function DigestScreen() {
       .on("postgres_changes", { event: "*", schema: "public", table: "purchase_order_items" }, () => load())
       .subscribe();
 
-    return () => supabase.removeChannel(channel);
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [RESTAURANT_ID]);
 
   async function load() {
@@ -75,7 +107,7 @@ export default function DigestScreen() {
         .eq("restaurant_id", RESTAURANT_ID)
         .in("status", ["sent", "partial"]);
 
-      let openItemIds = new Set();
+      let openItemIds = new Set<string>();
       if (openPOs && openPOs.length > 0) {
         const { data: openPOItems } = await supabase
           .from("purchase_order_items")
@@ -88,11 +120,15 @@ export default function DigestScreen() {
         );
       }
 
+      // par_level is guaranteed non-null here (.not("par_level", "is", null)
+      // above), but that's a runtime guarantee from the query, not something
+      // TS can see from a .not() filter - the (?? 0) below is defensive
+      // typing, not a behavior change.
       const belowPar = (items || []).filter(
-        (i) => i.current_stock <= i.par_level && !openItemIds.has(i.id)
-      );
+        (i) => (i.current_stock ?? 0) <= (i.par_level ?? 0) && !openItemIds.has(i.id)
+      ) as DigestItem[];
 
-      const grouped = {};
+      const grouped: Record<string, { items: DigestItem[]; phone: string | null; supplierId: string | null }> = {};
       for (const item of belowPar) {
         const { data: lastLine } = await supabase
           .from("invoice_line_items")
@@ -109,7 +145,7 @@ export default function DigestScreen() {
         grouped[supplierName].items.push(item);
       }
 
-      const groupList = Object.entries(grouped).map(([supplier, g]) => ({ supplier, items: g.items, phone: g.phone, supplierId: g.supplierId }));
+      const groupList: SupplierGroup[] = Object.entries(grouped).map(([supplier, g]) => ({ supplier, items: g.items, phone: g.phone, supplierId: g.supplierId }));
       setGroups(groupList);
       setExpanded(Object.fromEntries(groupList.map((g) => [g.supplier, true])));
       setDrafts(Object.fromEntries(groupList.map((g) => [g.supplier, draftMessage(g.supplier, g.items)])));
@@ -118,32 +154,33 @@ export default function DigestScreen() {
       setLoading(false);
   }
 
-  function toggleGroup(supplier) {
+  function toggleGroup(supplier: string) {
     setExpanded((e) => ({ ...e, [supplier]: !e[supplier] }));
   }
-  function copyDraft(supplier) {
+  function copyDraft(supplier: string) {
     navigator.clipboard?.writeText(drafts[supplier]);
     setCopied(supplier);
     setTimeout(() => setCopied(null), 1500);
   }
-  async function updateParLevel(itemId, value) {
+  async function updateParLevel(itemId: string, value: string) {
     const numValue = parseFloat(value);
     if (isNaN(numValue)) return;
     await supabase.from("inventory_items").update({ par_level: numValue }).eq("id", itemId);
     setEditingParId(null);
 
     const { data: poResult } = await supabase.rpc("auto_create_po_if_needed", { p_inventory_item_id: itemId });
+    const typedResult = poResult as AutoCreatePOResult | null;
 
-    if (poResult?.created) {
-      setAutoPOModal({ tone: "success", text: `${poResult.po_number} created — ordered ${poResult.quantity} ${poResult.unit} of ${poResult.item_name} from ${poResult.supplier_name}.` });
+    if (typedResult?.created) {
+      setAutoPOModal({ tone: "success", text: `${typedResult.po_number} created — ordered ${typedResult.quantity} ${typedResult.unit} of ${typedResult.item_name} from ${typedResult.supplier_name}.` });
       load(); // refresh - the item may now be covered by an open PO
-    } else if (poResult?.reason === "already_open") {
+    } else if (typedResult?.reason === "already_open") {
       setAutoPOModal({ tone: "info", text: "Par updated. This item already has an open order, so no new PO was created." });
       setGroups((prev) => prev.map((g) => ({ ...g, items: g.items.map((i) => (i.id === itemId ? { ...i, par_level: numValue } : i)) })));
-    } else if (poResult?.reason === "no_known_supplier") {
+    } else if (typedResult?.reason === "no_known_supplier") {
       setVendorPickerLoading(true);
       setAutoPOModal({ tone: "pick-vendor", itemId, text: "No supplier on file for this item yet — who should this order go to?" });
-      const { data: suppliers } = await supabase.from("suppliers").select("id, name").eq("restaurant_id", RESTAURANT_ID).order("name");
+      const { data: suppliers } = await supabase.from("suppliers").select("id, name").eq("restaurant_id", RESTAURANT_ID ?? "").order("name");
       setVendorPickerList(suppliers || []);
       setVendorPickerLoading(false);
       setGroups((prev) => prev.map((g) => ({ ...g, items: g.items.map((i) => (i.id === itemId ? { ...i, par_level: numValue } : i)) })));
@@ -152,22 +189,24 @@ export default function DigestScreen() {
     }
   }
 
-  async function assignSupplierAndCreatePO(supplierId) {
+  async function assignSupplierAndCreatePO(supplierId: string) {
     if (!autoPOModal?.itemId) return;
     setVendorPickerLoading(true);
     const { data: result } = await supabase.rpc("create_po_for_item_with_supplier", {
       p_inventory_item_id: autoPOModal.itemId,
       p_supplier_id: supplierId,
     });
-    if (result?.created) {
-      setAutoPOModal({ tone: "success", text: `${result.po_number} created — ordered ${result.quantity} ${result.unit} of ${result.item_name} from ${result.supplier_name}.` });
+    const typedResult = result as CreatePOWithSupplierResult | null;
+    if (typedResult?.created) {
+      setAutoPOModal({ tone: "success", text: `${typedResult.po_number} created — ordered ${typedResult.quantity} ${typedResult.unit} of ${typedResult.item_name} from ${typedResult.supplier_name}.` });
       load();
     } else {
       setAutoPOModal({ tone: "info", text: "Couldn't create the order — try again from the Reorder screen." });
     }
     setVendorPickerLoading(false);
   }
-  async function markSent(group) {
+  async function markSent(group: SupplierGroup) {
+    if (!RESTAURANT_ID) return;
     // Re-verify against open purchase orders right before creating a new one -
     // defense in depth in case this group's data went stale between the last
     // load() and this tap (e.g. another device/tab already sent an order for
@@ -354,7 +393,7 @@ export default function DigestScreen() {
                                   defaultValue={item.par_level}
                                   autoFocus
                                   onBlur={(e) => updateParLevel(item.id, e.target.value)}
-                                  onKeyDown={(e) => e.key === "Enter" && updateParLevel(item.id, e.target.value)}
+                                  onKeyDown={(e) => e.key === "Enter" && updateParLevel(item.id, (e.target as HTMLInputElement).value)}
                                   style={{ width: 40, background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 4, padding: "2px 4px", color: textPrimary, fontSize: 11, fontFamily: mono }}
                                 />
                                 <span style={{ fontSize: 11, color: textMuted }}>{item.unit}</span>

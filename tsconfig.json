@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    "strict": true,
+    // Deliberately off for this initial conversion pass, not an oversight.
+    // Converting 6 screens in one pass and hand-typing every function
+    // parameter would be a much bigger effort than "convert the app" calls
+    // for tonight. This still catches genuine mismatches (wrong types
+    // passed to typed Supabase calls, wrong RPC argument names, etc.) -
+    // it just doesn't force every untyped parameter to be annotated
+    // immediately. Standard incremental-adoption practice: tighten this to
+    // true (file by file) once the team is comfortable with the basics.
+    "noImplicitAny": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+
+    "allowJs": true
+  },
+  "include": ["src"]
+}
