@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity, ChevronDown, ChevronUp, Pencil, Clock, Package, Leaf, ChefHat } from "lucide-react";
+import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity, ChevronDown, ChevronUp, Pencil, Clock, Package, Leaf, ChefHat, Sparkles } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, sans, mono } from "../lib/tokens";
 import type { Database } from "../lib/database.types";
 import type { AutoCreatePOResult, CreatePOWithSupplierResult } from "../lib/rpc-types";
+import AskAgentModal from "./AskAgentModal";
 
 interface AutoPOModalState {
   tone: "success" | "info" | "pick-vendor";
@@ -171,6 +172,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
   const [autoPOModal, setAutoPOModal] = useState<AutoPOModalState | null>(null);
   const [vendorPickerList, setVendorPickerList] = useState<{ id: string; name: string }[]>([]);
   const [vendorPickerLoading, setVendorPickerLoading] = useState(false);
+  const [showAskAgent, setShowAskAgent] = useState(false);
 
   useEffect(() => {
     load();
@@ -657,6 +659,33 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
           <LogOut size={14} />
           Sign out
         </button>
+
+        <button
+          onClick={() => setShowAskAgent(true)}
+          style={{
+            position: "fixed",
+            bottom: 84,
+            right: 20,
+            width: 56,
+            height: 56,
+            borderRadius: "50%",
+            background: accent,
+            border: "none",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            boxShadow: "0 4px 14px rgba(30,91,140,0.4)",
+            zIndex: 500,
+          }}
+          aria-label="Ask about your business"
+        >
+          <Sparkles size={22} color="#FFFFFF" />
+        </button>
+
+        {showAskAgent && RESTAURANT_ID && (
+          <AskAgentModal restaurantId={RESTAURANT_ID} healthyPercent={healthyPct} onClose={() => setShowAskAgent(false)} />
+        )}
       </div>
     </div>
   );
