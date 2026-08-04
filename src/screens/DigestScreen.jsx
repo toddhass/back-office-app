@@ -5,7 +5,11 @@ import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, mono } from "../lib/tokens";
 
 function suggestQty(item) {
-  return Math.ceil(item.par_level - item.current_stock);
+  // Floor of 1: an item exactly AT par still counts as "below par" (<=)
+  // throughout the app, but ordering 0 units is useless. Same fix already
+  // applied to the SQL-side auto-PO functions - this was the one place it
+  // got missed, and it produced two real 0-quantity POs before being caught.
+  return Math.max(1, Math.ceil(item.par_level - item.current_stock));
 }
 function draftMessage(supplierName, items) {
   const lines = items.map((i) => `${suggestQty(i)} ${i.unit}${suggestQty(i) > 1 ? "s" : ""} ${i.name.split(",")[0]}`);
