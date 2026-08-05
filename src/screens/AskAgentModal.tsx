@@ -53,7 +53,7 @@ export default function AskAgentModal({ restaurantId, healthyPercent, onClose }:
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1500, display: "flex", alignItems: "flex-end", justifyContent: "center", animation: "backdropFadeIn 0.15s ease-out" }}>
+    <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1500, display: "flex", alignItems: "flex-end", justifyContent: "center", animation: "backdropFadeIn 0.15s ease-out" }}>
       <div
         style={{
           background: card,

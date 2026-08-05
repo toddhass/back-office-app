@@ -267,7 +267,7 @@ export default function CaptureScreen({ onDone }: { onDone: () => void }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "calc(100vh - 76px)" }}>
       {scanning && (
-        <div style={{ position: "fixed", inset: 0, background: "#000000", zIndex: 1000, display: "flex", flexDirection: "column" }}>
+        <div style={{ position: "absolute", inset: 0, background: "#000000", zIndex: 1000, display: "flex", flexDirection: "column" }}>
           <video ref={videoRef} playsInline muted style={{ flex: 1, width: "100%", objectFit: "cover" }} />
           <canvas ref={canvasRef} style={{ display: "none" }} />
           <div style={{ position: "absolute", top: 40, left: 0, right: 0, textAlign: "center", color: "#FFFFFF", fontSize: 14, padding: "0 24px" }}>
