@@ -1,9 +1,14 @@
-import { useRef, useState, useEffect } from "react";
-import { Camera, ImageIcon, Loader2, CheckCircle2, XCircle, RotateCcw, Copy, QrCode, X } from "lucide-react";
+import { useRef, useState, useEffect, lazy, Suspense } from "react";
+import { Camera, ImageIcon, Loader2, CheckCircle2, XCircle, RotateCcw, Copy, QrCode, X, ScanLine } from "lucide-react";
 import jsQR from "jsqr";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, mono } from "../lib/tokens";
+
+// Lazy-loaded, same reasoning as HomeScreen's use of this component:
+// @zxing/browser adds ~450kB on its own - only worth loading the moment
+// someone actually taps this button, not on every visit to Capture.
+const BarcodeScannerModal = lazy(() => import("./BarcodeScannerModal"));
 
 interface CaptureResult {
   supplier: string;
@@ -48,6 +53,7 @@ export default function CaptureScreen({ onDone }: { onDone: () => void }) {
   const [batchFileName, setBatchFileName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [scanning, setScanning] = useState(false);
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [scanError, setScanError] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -364,6 +370,25 @@ export default function CaptureScreen({ onDone }: { onDone: () => void }) {
               <QrCode size={15} />
               Scan QR code on invoice
             </button>
+            <button
+              onClick={() => setShowBarcodeScanner(true)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                background: "none",
+                border: "1px solid #E2E6ED",
+                borderRadius: 10,
+                padding: "14px",
+                cursor: "pointer",
+                color: textMuted,
+                fontSize: 13,
+              }}
+            >
+              <ScanLine size={15} />
+              Look up an item by barcode
+            </button>
             {scanError && <div style={{ color: danger, fontSize: 12, textAlign: "center" }}>{scanError}</div>}
           </div>
         )}
@@ -502,6 +527,12 @@ export default function CaptureScreen({ onDone }: { onDone: () => void }) {
           </div>
         )}
       </div>
+
+      {showBarcodeScanner && RESTAURANT_ID && (
+        <Suspense fallback={null}>
+          <BarcodeScannerModal restaurantId={RESTAURANT_ID} onClose={() => setShowBarcodeScanner(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }
