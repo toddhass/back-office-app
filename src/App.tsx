@@ -168,7 +168,7 @@ export default function App() {
         </div>
 
         {/* Content */}
-        <div style={{ flex: 1, display: "flex", justifyContent: "center", padding: "32px 24px" }}>
+        <div style={{ flex: 1, display: "flex", justifyContent: "center", padding: "32px 24px", position: "relative", minHeight: "100vh" }}>
           <div style={{ width: "100%", maxWidth: 720 }}>{activeScreen}</div>
         </div>
       </div>
@@ -178,7 +178,7 @@ export default function App() {
   return (
     <div style={{ background: bg, minHeight: "100vh", fontFamily: sans, color: textPrimary }}>
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
-      <div style={{ maxWidth: 420, margin: "0 auto", position: "relative" }}>
+      <div style={{ maxWidth: 420, margin: "0 auto", position: "relative", minHeight: "100vh" }}>
         <div
           style={{
             display: "flex",

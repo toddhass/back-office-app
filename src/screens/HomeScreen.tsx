@@ -376,7 +376,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
   return (
     <div style={{ fontFamily: sans }}>
       {autoPOModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, animation: "backdropFadeIn 0.15s ease-out" }}>
+        <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, animation: "backdropFadeIn 0.15s ease-out" }}>
           <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, width: "100%", maxWidth: 360, animation: "modalPopIn 0.25s ease-out" }}>
             <div style={{ fontSize: 14, color: textPrimary, lineHeight: 1.5, marginBottom: autoPOModal.tone === "pick-vendor" ? 14 : 16 }}>
               {autoPOModal.text}

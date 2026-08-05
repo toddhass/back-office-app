@@ -906,7 +906,7 @@ export default function InvoicesScreen() {
         </div>
 
         {editingEntity && (
-          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, animation: "backdropFadeIn 0.15s ease-out" }}>
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, animation: "backdropFadeIn 0.15s ease-out" }}>
             <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, width: "100%", maxWidth: 340, animation: "modalPopIn 0.25s ease-out" }}>
               <div style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", color: textMuted, marginBottom: 4 }}>
                 {editingEntity.type === "supplier" ? "Edit vendor" : "Edit item"}
