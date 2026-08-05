@@ -62,6 +62,7 @@ export type Database = {
       }
       inventory_items: {
         Row: {
+          barcode: string | null
           created_at: string | null
           current_stock: number | null
           embedding: string | null
@@ -75,6 +76,7 @@ export type Database = {
           unit: string
         }
         Insert: {
+          barcode?: string | null
           created_at?: string | null
           current_stock?: number | null
           embedding?: string | null
@@ -88,6 +90,7 @@ export type Database = {
           unit: string
         }
         Update: {
+          barcode?: string | null
           created_at?: string | null
           current_stock?: number | null
           embedding?: string | null

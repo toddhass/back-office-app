@@ -1,11 +1,18 @@
-import { useEffect, useState } from "react";
-import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity, ChevronDown, ChevronUp, Pencil, Clock, Package, Leaf, ChefHat, Sparkles } from "lucide-react";
+import { useEffect, useState, lazy, Suspense } from "react";
+import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity, ChevronDown, ChevronUp, Pencil, Clock, Package, Leaf, ChefHat, Sparkles, ScanLine } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, sans, mono } from "../lib/tokens";
 import type { Database } from "../lib/database.types";
 import type { AutoCreatePOResult, CreatePOWithSupplierResult } from "../lib/rpc-types";
 import AskAgentModal from "./AskAgentModal";
+
+// Lazy-loaded: @zxing/browser (needed for real barcode decoding, not just
+// jsQR's QR codes) adds ~450kB to the bundle on its own - nearly doubling
+// it if bundled normally. Code-splitting it means that cost is only paid
+// the moment someone actually taps the scan button, not on every page load
+// for people who never use this feature.
+const BarcodeScannerModal = lazy(() => import("./BarcodeScannerModal"));
 
 interface AutoPOModalState {
   tone: "success" | "info" | "pick-vendor";
@@ -173,6 +180,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
   const [vendorPickerList, setVendorPickerList] = useState<{ id: string; name: string }[]>([]);
   const [vendorPickerLoading, setVendorPickerLoading] = useState(false);
   const [showAskAgent, setShowAskAgent] = useState(false);
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
 
   useEffect(() => {
     load();
@@ -530,24 +538,33 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
 
         {!loading && health.total > 0 && (
           <div style={{ background: card, border: "1px solid #E2E6ED", borderRadius: 10, padding: "16px 18px" }}>
-            <button
-              onClick={() => {
-                setShowHealthDetail((s) => !s);
-                setExpandedCategory(null);
-              }}
-              style={{ width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Activity size={16} color={textMuted} />
-                <span style={{ fontSize: 13, fontWeight: 600, color: textPrimary }}>Inventory health</span>
-                {showHealthDetail ? <ChevronUp size={14} color={textMuted} /> : <ChevronDown size={14} color={textMuted} />}
-              </div>
-              {healthyPct != null && (
-                <span style={{ fontSize: 13, fontFamily: mono, color: healthyPct >= 70 ? good : healthyPct >= 40 ? accent : danger }}>
-                  {healthyPct}% healthy
-                </span>
-              )}
-            </button>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <button
+                onClick={() => {
+                  setShowHealthDetail((s) => !s);
+                  setExpandedCategory(null);
+                }}
+                style={{ flex: 1, background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Activity size={16} color={textMuted} />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: textPrimary }}>Inventory health</span>
+                  {showHealthDetail ? <ChevronUp size={14} color={textMuted} /> : <ChevronDown size={14} color={textMuted} />}
+                </div>
+                {healthyPct != null && (
+                  <span style={{ fontSize: 13, fontFamily: mono, color: healthyPct >= 70 ? good : healthyPct >= 40 ? accent : danger }}>
+                    {healthyPct}% healthy
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setShowBarcodeScanner(true)}
+                aria-label="Scan a barcode to find an item"
+                style={{ background: "none", border: "none", cursor: "pointer", color: textMuted, padding: "0 0 0 10px", display: "flex" }}
+              >
+                <ScanLine size={16} />
+              </button>
+            </div>
 
             {/* Segmented bar: healthy / below par / untracked */}
             <div style={{ display: "flex", width: "100%", height: 8, borderRadius: 4, overflow: "hidden", marginBottom: 10 }}>
@@ -685,6 +702,11 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
 
         {showAskAgent && RESTAURANT_ID && (
           <AskAgentModal restaurantId={RESTAURANT_ID} healthyPercent={healthyPct} onClose={() => setShowAskAgent(false)} />
+        )}
+        {showBarcodeScanner && RESTAURANT_ID && (
+          <Suspense fallback={null}>
+            <BarcodeScannerModal restaurantId={RESTAURANT_ID} onClose={() => setShowBarcodeScanner(false)} />
+          </Suspense>
         )}
       </div>
     </div>
