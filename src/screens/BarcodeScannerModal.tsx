@@ -24,6 +24,8 @@ export default function BarcodeScannerModal({ restaurantId, onClose }: BarcodeSc
   const [foundItem, setFoundItem] = useState<InventoryItem | null>(null);
   const [notFoundCode, setNotFoundCode] = useState<string | null>(null);
   const [looking, setLooking] = useState(false);
+  const [showManualEntry, setShowManualEntry] = useState(false);
+  const [manualCode, setManualCode] = useState("");
 
   useEffect(() => {
     // Telling the decoder exactly which formats to expect is a real,
@@ -105,9 +107,19 @@ export default function BarcodeScannerModal({ restaurantId, onClose }: BarcodeSc
     setLooking(false);
   }
 
+  function submitManualCode() {
+    const trimmed = manualCode.trim();
+    if (!trimmed) return;
+    setShowManualEntry(false);
+    setManualCode("");
+    handleDetected(trimmed);
+  }
+
   function scanAgain() {
     setFoundItem(null);
     setNotFoundCode(null);
+    setShowManualEntry(false);
+    setManualCode("");
     setScanning(true);
   }
 
@@ -130,12 +142,49 @@ export default function BarcodeScannerModal({ restaurantId, onClose }: BarcodeSc
             <div style={{ color: "#FFFFFF", fontSize: 13, marginTop: 16, textAlign: "center", padding: "0 24px" }}>
               Hold the barcode flat, well-lit, and about 4-6 inches away
             </div>
+            <button
+              onClick={() => setShowManualEntry(true)}
+              style={{ background: "none", border: "none", color: "rgba(255,255,255,0.85)", fontSize: 13, textDecoration: "underline", marginTop: 14, cursor: "pointer", pointerEvents: "auto" }}
+            >
+              Can't scan it? Enter the number instead
+            </button>
           </div>
         )}
       </div>
 
       {error && (
         <div style={{ background: "#FDECEC", color: danger, padding: "12px 18px", fontSize: 13 }}>{error}</div>
+      )}
+
+      {showManualEntry && !foundItem && !notFoundCode && (
+        <div style={{ background: "#FFFFFF", borderRadius: "16px 16px 0 0", padding: "20px 18px" }}>
+          <div style={{ fontSize: 13, color: textMuted, marginBottom: 10 }}>Enter the UPC/barcode number</div>
+          <input
+            type="text"
+            inputMode="numeric"
+            autoFocus
+            value={manualCode}
+            onChange={(e) => setManualCode(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submitManualCode()}
+            placeholder="e.g. 049000028911"
+            style={{ width: "100%", background: "#F9FAFB", border: "1px solid #D6DCE5", borderRadius: 8, padding: "12px 14px", fontSize: 16, fontFamily: "monospace", color: "#16202E", marginBottom: 12, boxSizing: "border-box" }}
+          />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => setShowManualEntry(false)}
+              style={{ flex: 1, background: "none", border: "1px solid #E2E6ED", borderRadius: 8, padding: 12, color: textMuted, fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={submitManualCode}
+              disabled={!manualCode.trim() || looking}
+              style={{ flex: 2, background: accent, border: "none", borderRadius: 8, padding: 12, color: "#FFFFFF", fontWeight: 700, fontSize: 14, cursor: "pointer", opacity: !manualCode.trim() || looking ? 0.5 : 1 }}
+            >
+              {looking ? "Looking up…" : "Look up"}
+            </button>
+          </div>
+        </div>
       )}
 
       {(foundItem || notFoundCode) && (
