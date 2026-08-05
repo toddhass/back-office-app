@@ -167,7 +167,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
   const [belowParCount, setBelowParCount] = useState(0);
   const [stockoutRisks, setStockoutRisks] = useState<Database["public"]["Functions"]["stockout_risk_items"]["Returns"]>([]);
   const [atRiskItems, setAtRiskItems] = useState<Database["public"]["Functions"]["at_risk_items"]["Returns"]>([]);
-  const [health, setHealth] = useState<{ total: number; healthy: number; belowPar: number; noPar: number; healthyItems: HealthItem[]; belowParItems: HealthItem[]; noParItems: HealthItem[] }>({ total: 0, healthy: 0, belowPar: 0, noPar: 0, healthyItems: [], belowParItems: [], noParItems: [] });
+  const [health, setHealth] = useState<{ total: number; healthy: number; belowPar: number; belowParOnOrder: number; noPar: number; healthyItems: HealthItem[]; belowParItems: HealthItem[]; noParItems: HealthItem[] }>({ total: 0, healthy: 0, belowPar: 0, belowParOnOrder: 0, noPar: 0, healthyItems: [], belowParItems: [], noParItems: [] });
   const [showHealthDetail, setShowHealthDetail] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null); // 'belowPar' | 'noPar' | 'healthy' | null
   const [editingParId, setEditingParId] = useState<string | null>(null);
@@ -232,19 +232,13 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
     const tracked = items.filter((i) => i.par_level != null);
     const belowParItems = tracked.filter((i) => (i.current_stock ?? 0) <= (i.par_level ?? 0));
     const healthyItems = tracked.filter((i) => (i.current_stock ?? 0) > (i.par_level ?? 0));
-    setHealth({
-      total: items.length,
-      healthy: healthyItems.length,
-      belowPar: belowParItems.length,
-      noPar: noParItems.length,
-      healthyItems,
-      belowParItems,
-      noParItems,
-    });
 
-    // Actionable alert count excludes items already covered by an open
-    // purchase order - matches the same guard logic as the Reorder digest,
-    // so this number only reflects items that actually need a NEW order.
+    // Fetched here (before setHealth) so the below-par count can show how
+    // many of those items are already covered by an open PO - without this,
+    // "3 below par" here and "nothing below par" on the Reorder digest look
+    // like contradicting data, when they're actually both correct: this is
+    // raw current stock state, Reorder deliberately excludes items already
+    // on order since there's nothing NEW to do about those.
     const { data: openPOs } = await supabase
       .from("purchase_orders")
       .select("id")
@@ -264,8 +258,21 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
       );
     }
 
+    const belowParOnOrderCount = belowParItems.filter((i) => openItemIds.has(i.id)).length;
+
+    setHealth({
+      total: items.length,
+      healthy: healthyItems.length,
+      belowPar: belowParItems.length,
+      belowParOnOrder: belowParOnOrderCount,
+      noPar: noParItems.length,
+      healthyItems,
+      belowParItems,
+      noParItems,
+    });
+
     setBelowParCount(
-      tracked.filter((i) => (i.current_stock ?? 0) <= (i.par_level ?? 0) && !openItemIds.has(i.id)).length
+      belowParItems.filter((i) => !openItemIds.has(i.id)).length
     );
 
     const { data: risks } = await supabase.rpc("stockout_risk_items", { p_restaurant_id: RESTAURANT_ID });
@@ -575,7 +582,12 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
 
             <div style={{ display: "flex", flexWrap: "wrap", gap: 12, fontSize: 12, color: textMuted }}>
               <span><span style={{ color: good, fontFamily: mono }}>{health.healthy}</span> healthy</span>
-              <span><span style={{ color: danger, fontFamily: mono }}>{health.belowPar}</span> below par</span>
+              <span>
+                <span style={{ color: danger, fontFamily: mono }}>{health.belowPar}</span> below par
+                {health.belowParOnOrder > 0 && (
+                  <span style={{ color: textMuted }}> ({health.belowParOnOrder} already on order)</span>
+                )}
+              </span>
               {health.noPar > 0 && (
                 <span><span style={{ color: textMuted, fontFamily: mono }}>{health.noPar}</span> not tracked (no par level set)</span>
               )}
