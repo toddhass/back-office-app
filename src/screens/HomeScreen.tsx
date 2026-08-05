@@ -421,7 +421,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
 
       <div className="px-4 pt-4 pb-2 flex flex-col gap-2.5">
         {!loading && timeStats.totalCount > 0 && (
-          <div className="bg-gradient-to-br from-[#1E5B8C] to-[#164569] rounded-[10px] p-[18px] text-white">
+          <div className="bg-[linear-gradient(135deg,#1E5B8C,#164569)] rounded-[10px] p-[18px] text-white">
             <div className="flex items-center gap-2 mb-2 opacity-85">
               <Clock size={15} />
               <span className="text-xs font-semibold tracking-wide">TIME SAVED</span>
