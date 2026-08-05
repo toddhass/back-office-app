@@ -895,6 +895,10 @@ export type Database = {
         Args: { p_restaurant_id: string }
         Returns: Json
       }
+      get_open_po_line_for_item: {
+        Args: { p_inventory_item_id: string }
+        Returns: Json
+      }
       mark_item_used_before_waste: {
         Args: {
           p_inventory_item_id: string
@@ -928,6 +932,10 @@ export type Database = {
         }[]
       }
       normalize_item_text: { Args: { input: string }; Returns: string }
+      receive_po_item_by_barcode: {
+        Args: { p_inventory_item_id: string; p_quantity: number }
+        Returns: Json
+      }
       redeem_invite: { Args: { p_code: string }; Returns: string }
       reopen_invoice_for_correction: {
         Args: { p_invoice_id: string }

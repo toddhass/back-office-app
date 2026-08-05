@@ -1,12 +1,29 @@
 import { useEffect, useRef, useState } from "react";
-import { X, ScanLine, PackageSearch } from "lucide-react";
+import { X, ScanLine, PackageSearch, PackageCheck } from "lucide-react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 import { supabase } from "../lib/supabaseClient";
 import type { Tables } from "../lib/database.types";
-import { accent, danger, textMuted } from "../lib/tokens";
+import { accent, danger, good, textMuted } from "../lib/tokens";
 
 type InventoryItem = Tables<"inventory_items">;
+
+interface OpenPOInfo {
+  po_number: string | null;
+  quantity_ordered: number;
+  quantity_received: number;
+}
+
+interface ReceiveResult {
+  received: boolean;
+  item_name?: string;
+  unit?: string;
+  quantity_received?: number;
+  new_stock?: number;
+  po_number?: string;
+  fully_received?: boolean;
+  reason?: string;
+}
 
 interface BarcodeScannerModalProps {
   restaurantId: string;
@@ -26,6 +43,10 @@ export default function BarcodeScannerModal({ restaurantId, onClose }: BarcodeSc
   const [looking, setLooking] = useState(false);
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [manualCode, setManualCode] = useState("");
+  const [openPO, setOpenPO] = useState<OpenPOInfo | null>(null);
+  const [receiveQty, setReceiveQty] = useState("");
+  const [receiving, setReceiving] = useState(false);
+  const [receiveResult, setReceiveResult] = useState<ReceiveResult | null>(null);
 
   useEffect(() => {
     // Telling the decoder exactly which formats to expect is a real,
@@ -94,9 +115,23 @@ export default function BarcodeScannerModal({ restaurantId, onClose }: BarcodeSc
       if (data) {
         setFoundItem(data);
         setNotFoundCode(null);
+
+        // Real gap this closes: the scanner used to only ever look an item
+        // up, never record anything as arrived. Check for an open PO line
+        // for this item so a delivery can actually be marked received here.
+        const { data: poLine } = await supabase.rpc("get_open_po_line_for_item", { p_inventory_item_id: data.id });
+        const typedPoLine = poLine as { po_number: string | null; quantity_ordered: number; quantity_received: number } | null;
+
+        if (typedPoLine) {
+          setOpenPO({ po_number: typedPoLine.po_number, quantity_ordered: Number(typedPoLine.quantity_ordered), quantity_received: Number(typedPoLine.quantity_received) });
+          setReceiveQty(String(Number(typedPoLine.quantity_ordered) - Number(typedPoLine.quantity_received)));
+        } else {
+          setOpenPO(null);
+        }
       } else {
         setNotFoundCode(code);
         setFoundItem(null);
+        setOpenPO(null);
       }
     } catch {
       // Never leave the user stuck on a black screen with no feedback -
@@ -115,11 +150,25 @@ export default function BarcodeScannerModal({ restaurantId, onClose }: BarcodeSc
     handleDetected(trimmed);
   }
 
+  async function receiveDelivery() {
+    if (!foundItem || !receiveQty) return;
+    setReceiving(true);
+    const { data } = await supabase.rpc("receive_po_item_by_barcode", {
+      p_inventory_item_id: foundItem.id,
+      p_quantity: Number(receiveQty),
+    });
+    setReceiveResult(data as unknown as ReceiveResult);
+    setReceiving(false);
+  }
+
   function scanAgain() {
     setFoundItem(null);
     setNotFoundCode(null);
     setShowManualEntry(false);
     setManualCode("");
+    setOpenPO(null);
+    setReceiveQty("");
+    setReceiveResult(null);
     setScanning(true);
   }
 
@@ -198,6 +247,35 @@ export default function BarcodeScannerModal({ restaurantId, onClose }: BarcodeSc
               <div style={{ fontSize: 14, color: textMuted, fontFamily: "monospace", marginBottom: 16 }}>
                 {foundItem.current_stock ?? 0} / {foundItem.par_level ?? "no par set"} {foundItem.unit}
               </div>
+
+              {receiveResult ? (
+                <div style={{ background: receiveResult.received ? "#E6F4EC" : "#FDECEC", border: `1px solid ${receiveResult.received ? "#BFE3D0" : "#F3B8B8"}`, borderRadius: 8, padding: "10px 12px", fontSize: 13, color: receiveResult.received ? good : danger, marginBottom: 16 }}>
+                  {receiveResult.received
+                    ? `Received ${receiveResult.quantity_received} ${receiveResult.unit} — ${receiveResult.item_name} now at ${receiveResult.new_stock} ${receiveResult.unit}. ${receiveResult.po_number} ${receiveResult.fully_received ? "fully received." : "partially received, still open."}`
+                    : "Couldn't record that delivery — try again."}
+                </div>
+              ) : openPO ? (
+                <div style={{ background: "#F1F4F8", border: "1px solid #E2E6ED", borderRadius: 8, padding: "12px 14px", marginBottom: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, color: accent, fontSize: 13, fontWeight: 700 }}>
+                    <PackageCheck size={14} /> {openPO.po_number} — {openPO.quantity_received}/{openPO.quantity_ordered} {foundItem.unit} received so far
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input
+                      type="number"
+                      value={receiveQty}
+                      onChange={(e) => setReceiveQty(e.target.value)}
+                      style={{ flex: 1, background: "#FFFFFF", border: "1px solid #D6DCE5", borderRadius: 6, padding: "8px 10px", fontSize: 14, fontFamily: "monospace" }}
+                    />
+                    <button
+                      onClick={receiveDelivery}
+                      disabled={receiving || !receiveQty}
+                      style={{ background: good, border: "none", borderRadius: 6, padding: "8px 16px", color: "#FFFFFF", fontWeight: 700, fontSize: 13, cursor: "pointer", opacity: receiving || !receiveQty ? 0.5 : 1 }}
+                    >
+                      {receiving ? "Saving…" : "Mark received"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </>
           ) : (
             <div style={{ fontSize: 14, color: textMuted, marginBottom: 16 }}>
