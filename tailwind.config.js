@@ -39,4 +39,15 @@ export default {
     },
   },
   plugins: [],
+  // These utility names never appear as actual classNames anywhere in the
+  // app - they get generated anyway because Tailwind's scanner is regex-
+  // based, not a real parser, and matches these words wherever they appear
+  // in the file at all: "table" in Supabase query configs
+  // ({ table: "invoices" }), "filter"/"resize" as Array methods and inline
+  // style values, "underline" in an inline textDecoration value, "block" in
+  // code comments, etc. Confirmed via a real audit (grepped every one
+  // individually against actual className usage) before blocking them -
+  // this isn't a guess, every entry here was verified to have zero real
+  // usage. Small savings (a few hundred bytes), but free and exact.
+  blocklist: ["table", "resize", "underline", "visible", "hidden", "inline", "block", "filter", "transform"],
 };
