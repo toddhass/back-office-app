@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { X, ScanLine, PackageSearch } from "lucide-react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
+import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 import { supabase } from "../lib/supabaseClient";
 import type { Tables } from "../lib/database.types";
 import { accent, danger, textMuted } from "../lib/tokens";
@@ -25,15 +26,38 @@ export default function BarcodeScannerModal({ restaurantId, onClose }: BarcodeSc
   const [looking, setLooking] = useState(false);
 
   useEffect(() => {
-    const reader = new BrowserMultiFormatReader();
+    // Telling the decoder exactly which formats to expect is a real,
+    // well-documented reliability/speed improvement for 1D barcodes
+    // specifically - without this, it tries every format it knows on every
+    // frame, which is slower and measurably less reliable in practice than
+    // being told "look for one of these." QR handling elsewhere in the app
+    // doesn't need this since jsQR only ever looks for QR codes anyway.
+    const hints = new Map();
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+      BarcodeFormat.UPC_A,
+      BarcodeFormat.UPC_E,
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.CODE_128,
+      BarcodeFormat.CODE_39,
+      BarcodeFormat.ITF,
+    ]);
+    const reader = new BrowserMultiFormatReader(hints);
     let cancelled = false;
     let controls: { stop: () => void } | null = null;
 
+    // Explicit constraints instead of decodeFromVideoDevice's defaults:
+    // 1D barcodes need meaningfully more camera resolution than a QR code
+    // to stay legible, especially on a curved surface like a bottle label.
     reader
-      .decodeFromVideoDevice(undefined, videoRef.current!, (result) => {
-        if (cancelled || !result || looking || foundItem) return;
-        handleDetected(result.getText());
-      })
+      .decodeFromConstraints(
+        { video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } },
+        videoRef.current!,
+        (result) => {
+          if (cancelled || !result || looking || foundItem) return;
+          handleDetected(result.getText());
+        }
+      )
       .then((c) => {
         if (cancelled) {
           c.stop();
@@ -92,8 +116,11 @@ export default function BarcodeScannerModal({ restaurantId, onClose }: BarcodeSc
       <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
         <video ref={videoRef} style={{ width: "100%", height: "100%", objectFit: "cover" }} muted playsInline />
         {scanning && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
             <div style={{ width: "70%", height: 120, border: "2px solid rgba(255,255,255,0.8)", borderRadius: 8 }} />
+            <div style={{ color: "#FFFFFF", fontSize: 13, marginTop: 16, textAlign: "center", padding: "0 24px" }}>
+              Hold the barcode flat, well-lit, and about 4-6 inches away
+            </div>
           </div>
         )}
       </div>
