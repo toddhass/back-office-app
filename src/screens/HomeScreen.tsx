@@ -454,7 +454,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
         )}
 
         {!loading && stockoutRisks.length > 0 && (
-          <div
+          <button
             onClick={() => onNavigate("digest")}
             style={{ width: "100%", textAlign: "left", background: "#FDECEC", border: "1px solid #F3B8B8", borderRadius: 10, padding: "16px 18px", color: textPrimary, cursor: "pointer", animation: "bannerSlideIn 0.3s ease-out" }}
           >
@@ -471,11 +471,11 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
                 </div>
               ))}
             </div>
-          </div>
+          </button>
         )}
 
         {!loading && atRiskItems.length > 0 && (
-          <div
+          <button
             onClick={() => onNavigate("kitchen")}
             style={{ width: "100%", textAlign: "left", background: "#FFF7ED", border: "1px solid #FBD9A8", borderRadius: 10, padding: "16px 18px", color: textPrimary, cursor: "pointer", animation: "bannerSlideIn 0.3s ease-out" }}
           >
@@ -492,7 +492,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
                 </div>
               ))}
             </div>
-          </div>
+          </button>
         )}
 
         {!loading && pendingCount > 0 && (
