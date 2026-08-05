@@ -1,5 +1,5 @@
 import { useEffect, useState, lazy, Suspense } from "react";
-import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity, ChevronDown, ChevronUp, Pencil, Clock, Package, Leaf, ChefHat, Sparkles, ScanLine } from "lucide-react";
+import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity, ChevronDown, ChevronUp, Pencil, Clock, Package, Leaf, ChefHat, Sparkles, ScanLine, X } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, sans, mono } from "../lib/tokens";
@@ -102,17 +102,28 @@ function HealthCategorySection({ categoryKey, label, color, items, expandedCateg
   );
 }
 
+interface POLineItem {
+  name: string;
+  unit: string;
+  quantityOrdered: number;
+  quantityReceived: number;
+}
+
 interface POSummaryItem {
   id: string;
   po_number: string | null;
   supplier: string;
   expected_delivery_date: string | null;
   itemCount: number;
+  items: POLineItem[];
 }
 
-function PORow({ po }: { po: POSummaryItem }) {
+function PORow({ po, onSelect }: { po: POSummaryItem; onSelect: (po: POSummaryItem) => void }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}>
+    <button
+      onClick={() => onSelect(po)}
+      style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
+    >
       <div>
         <span style={{ color: textPrimary, fontFamily: mono, fontWeight: 600 }}>{po.po_number}</span>
         <span style={{ color: textMuted }}> · {po.supplier}</span>
@@ -121,7 +132,7 @@ function PORow({ po }: { po: POSummaryItem }) {
         {po.itemCount} item{po.itemCount !== 1 ? "s" : ""}
         {po.expected_delivery_date && ` · ${po.expected_delivery_date}`}
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -132,9 +143,10 @@ interface POCategorySectionProps {
   items: POSummaryItem[];
   expandedCategory: string | null;
   setExpandedCategory: (key: string | null) => void;
+  onSelectPO: (po: POSummaryItem) => void;
 }
 
-function POCategorySection({ categoryKey, label, color, items, expandedCategory, setExpandedCategory }: POCategorySectionProps) {
+function POCategorySection({ categoryKey, label, color, items, expandedCategory, setExpandedCategory, onSelectPO }: POCategorySectionProps) {
   if (items.length === 0) return null;
   const isOpen = expandedCategory === categoryKey;
   return (
@@ -151,7 +163,7 @@ function POCategorySection({ categoryKey, label, color, items, expandedCategory,
       {isOpen && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 180, minHeight: 0, overflowY: "auto" }}>
           {items.map((po) => (
-            <PORow key={po.id} po={po} />
+            <PORow key={po.id} po={po} onSelect={onSelectPO} />
           ))}
         </div>
       )}
@@ -181,6 +193,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
   const [vendorPickerLoading, setVendorPickerLoading] = useState(false);
   const [showAskAgent, setShowAskAgent] = useState(false);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+  const [selectedPO, setSelectedPO] = useState<POSummaryItem | null>(null);
 
   useEffect(() => {
     load();
@@ -315,11 +328,12 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
     const wasteValue = (wasteLog || []).reduce((sum, w) => sum + (Number(w.estimated_value) || 0), 0);
     setWasteStats({ count: wasteCount, value: wasteValue });
 
-    // Purchase order summary - grouped by fulfillment status, with item
-    // counts per PO for a quick "what's in it" glance.
+    // Purchase order summary - grouped by fulfillment status, with the
+    // actual items on each PO (not just a count) so tapping one can show
+    // real detail instead of nothing.
     const { data: pos } = await supabase
       .from("purchase_orders")
-      .select("id, po_number, status, expected_delivery_date, created_at, suppliers(name), purchase_order_items(id)")
+      .select("id, po_number, status, expected_delivery_date, created_at, suppliers(name), purchase_order_items(id, quantity_ordered, quantity_received, inventory_items(name, unit))")
       .eq("restaurant_id", RESTAURANT_ID)
       .order("created_at", { ascending: false });
 
@@ -329,6 +343,12 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
       supplier: p.suppliers?.name || "Unknown",
       expected_delivery_date: p.expected_delivery_date,
       itemCount: p.purchase_order_items?.length || 0,
+      items: (p.purchase_order_items || []).map((poi) => ({
+        name: poi.inventory_items?.name || "Unknown item",
+        unit: poi.inventory_items?.unit || "",
+        quantityOrdered: Number(poi.quantity_ordered),
+        quantityReceived: Number(poi.quantity_received),
+      })),
     }));
 
     setPoSummary({
@@ -390,6 +410,37 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
 
   return (
     <div style={{ fontFamily: sans }}>
+      {selectedPO && (
+        <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, animation: "backdropFadeIn 0.15s ease-out" }}>
+          <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, width: "100%", maxWidth: 380, maxHeight: "80vh", display: "flex", flexDirection: "column", animation: "modalPopIn 0.25s ease-out" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+              <div>
+                <div style={{ fontFamily: mono, fontWeight: 700, fontSize: 16, color: textPrimary }}>{selectedPO.po_number}</div>
+                <div style={{ fontSize: 13, color: textMuted, marginTop: 2 }}>{selectedPO.supplier}</div>
+              </div>
+              <button onClick={() => setSelectedPO(null)} style={{ background: "none", border: "none", cursor: "pointer", color: textMuted, padding: 4 }}>
+                <X size={18} />
+              </button>
+            </div>
+            {selectedPO.expected_delivery_date && (
+              <div style={{ fontSize: 12, color: textMuted, marginBottom: 14 }}>Expected {selectedPO.expected_delivery_date}</div>
+            )}
+            <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+              {selectedPO.items.map((item, i) => {
+                const fulfilled = item.quantityReceived >= item.quantityOrdered;
+                return (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#F1F4F8", borderRadius: 8, padding: "10px 12px" }}>
+                    <div style={{ fontSize: 13, color: textPrimary }}>{item.name}</div>
+                    <div style={{ fontSize: 12, fontFamily: mono, color: fulfilled ? good : textMuted }}>
+                      {item.quantityReceived}/{item.quantityOrdered} {item.unit}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
       {autoPOModal && (
         <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, animation: "backdropFadeIn 0.15s ease-out" }}>
           <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, width: "100%", maxWidth: 360, animation: "modalPopIn 0.25s ease-out" }}>
@@ -665,9 +716,9 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) =
 
             {showPODetail && (
               <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #E2E6ED", display: "flex", flexDirection: "column", gap: 12 }}>
-                <POCategorySection categoryKey="open" label="Open" color={accent} items={poSummary.openPOs} expandedCategory={expandedPOCategory} setExpandedCategory={setExpandedPOCategory} />
-                <POCategorySection categoryKey="partial" label="Partial" color="#D97706" items={poSummary.partialPOs} expandedCategory={expandedPOCategory} setExpandedCategory={setExpandedPOCategory} />
-                <POCategorySection categoryKey="fulfilled" label="Fulfilled" color={good} items={poSummary.fulfilledPOs} expandedCategory={expandedPOCategory} setExpandedCategory={setExpandedPOCategory} />
+                <POCategorySection categoryKey="open" label="Open" color={accent} items={poSummary.openPOs} expandedCategory={expandedPOCategory} setExpandedCategory={setExpandedPOCategory} onSelectPO={setSelectedPO} />
+                <POCategorySection categoryKey="partial" label="Partial" color="#D97706" items={poSummary.partialPOs} expandedCategory={expandedPOCategory} setExpandedCategory={setExpandedPOCategory} onSelectPO={setSelectedPO} />
+                <POCategorySection categoryKey="fulfilled" label="Fulfilled" color={good} items={poSummary.fulfilledPOs} expandedCategory={expandedPOCategory} setExpandedCategory={setExpandedPOCategory} onSelectPO={setSelectedPO} />
               </div>
             )}
           </div>
