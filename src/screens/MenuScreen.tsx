@@ -43,6 +43,13 @@ export default function MenuScreen() {
   const [newIngredientNotes, setNewIngredientNotes] = useState("");
   const [newItemName, setNewItemName] = useState("");
   const [newItemPar, setNewItemPar] = useState("");
+  // Deliberately separate from newIngredientUnit: a recipe measures usage
+  // per serving (e.g. "0.25 lb" of salt in a taco), but par level tracks
+  // what's kept in stock, usually in a different, larger purchasing unit
+  // (e.g. "lb" bags or "case"). Conflating the two into one shared "Unit"
+  // field made the par level nonsensical for anything measured finely at
+  // the recipe level but stocked in bulk.
+  const [newItemStockUnit, setNewItemStockUnit] = useState("");
   const [addingIngredient, setAddingIngredient] = useState(false);
 
   const [autoPOModal, setAutoPOModal] = useState<AutoPOModalState | null>(null);
@@ -134,6 +141,7 @@ export default function MenuScreen() {
     setNewIngredientNotes("");
     setNewItemName("");
     setNewItemPar("");
+    setNewItemStockUnit("");
   }
 
   async function addIngredient() {
@@ -152,7 +160,7 @@ export default function MenuScreen() {
         .insert({
           restaurant_id: RESTAURANT_ID,
           name: newItemName.trim(),
-          unit: newIngredientUnit.trim() || "ea",
+          unit: newItemStockUnit.trim() || "ea",
           current_stock: 0,
           par_level: parValue,
         })
@@ -352,16 +360,28 @@ export default function MenuScreen() {
                   onChange={(e) => setNewItemName(e.target.value)}
                   className="w-full bg-input-bg border border-border-strong rounded-lg px-3 py-2.5 text-sm text-ink mb-2"
                 />
-                <input
-                  type="number"
-                  placeholder="Par level (optional) — enables auto-reordering"
-                  value={newItemPar}
-                  onChange={(e) => setNewItemPar(e.target.value)}
-                  className="w-full bg-input-bg border border-border-strong rounded-lg px-3 py-2.5 text-sm text-ink mb-2"
-                />
+                <div className="flex gap-2 mb-1">
+                  <input
+                    type="number"
+                    placeholder="Par level (optional)"
+                    value={newItemPar}
+                    onChange={(e) => setNewItemPar(e.target.value)}
+                    className="flex-1 bg-input-bg border border-border-strong rounded-lg px-3 py-2.5 text-sm text-ink"
+                  />
+                  <input
+                    placeholder="Stock unit — e.g. lb, case"
+                    value={newItemStockUnit}
+                    onChange={(e) => setNewItemStockUnit(e.target.value)}
+                    className="w-32 bg-input-bg border border-border-strong rounded-lg px-3 py-2.5 text-sm text-ink"
+                  />
+                </div>
+                <div className="text-xs text-slate mb-2 px-1">
+                  How this item is stocked and reordered - can differ from how much the recipe below uses per serving.
+                </div>
               </>
             )}
 
+            <div className="text-xs uppercase tracking-wide text-slate mb-1.5 px-1">Amount used per serving</div>
             <div className="flex gap-2 mb-2">
               <input
                 type="number"
