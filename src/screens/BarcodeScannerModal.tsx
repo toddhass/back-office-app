@@ -79,19 +79,28 @@ export default function BarcodeScannerModal({ restaurantId, onClose }: BarcodeSc
   async function handleDetected(code: string) {
     setLooking(true);
     setScanning(false);
-    const { data } = await supabase
-      .from("inventory_items")
-      .select("*")
-      .eq("restaurant_id", restaurantId)
-      .eq("barcode", code)
-      .maybeSingle();
+    try {
+      const { data, error: lookupError } = await supabase
+        .from("inventory_items")
+        .select("*")
+        .eq("restaurant_id", restaurantId)
+        .eq("barcode", code)
+        .maybeSingle();
 
-    if (data) {
-      setFoundItem(data);
-      setNotFoundCode(null);
-    } else {
-      setNotFoundCode(code);
-      setFoundItem(null);
+      if (lookupError) throw lookupError;
+
+      if (data) {
+        setFoundItem(data);
+        setNotFoundCode(null);
+      } else {
+        setNotFoundCode(code);
+        setFoundItem(null);
+      }
+    } catch {
+      // Never leave the user stuck on a black screen with no feedback -
+      // whatever went wrong, say so and let them try again.
+      setError("Something went wrong looking that up - try scanning again.");
+      setScanning(true);
     }
     setLooking(false);
   }
@@ -103,7 +112,7 @@ export default function BarcodeScannerModal({ restaurantId, onClose }: BarcodeSc
   }
 
   return (
-    <div style={{ position: "absolute", inset: 0, background: "#000000", zIndex: 1000, display: "flex", flexDirection: "column" }}>
+    <div style={{ position: "fixed", inset: 0, background: "#000000", zIndex: 1000, display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 18px" }}>
         <div style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
           <ScanLine size={16} /> Scan a barcode
