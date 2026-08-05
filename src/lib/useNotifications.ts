@@ -85,6 +85,39 @@ export function useNotifications(restaurantId: string | null) {
           }
         }
       )
+      // A dish just became impossible to make - stock of one of its recipe
+      // ingredients dropped below the quantity a single serving actually
+      // needs. Only fires on the actual crossing (had enough before, don't
+      // now), same "crossed" discipline as the par-level check above - a
+      // dish that's already unmakeable doesn't re-notify on every further
+      // depletion of the same ingredient.
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "inventory_items", filter: `restaurant_id=eq.${restaurantId}` },
+        async (payload: RealtimePostgresChangesPayload<InventoryItemRow>) => {
+          const before = payload.old;
+          const after = payload.new;
+          if (!after || !("id" in after) || !("current_stock" in after)) return;
+          const beforeStock = before && "current_stock" in before && before.current_stock != null ? Number(before.current_stock) : null;
+          if (beforeStock == null) return;
+          const afterStock = Number(after.current_stock);
+          if (afterStock >= beforeStock) return; // only relevant when stock went down
+
+          const { data: uses } = await supabase
+            .from("recipe_ingredients")
+            .select("quantity, menu_items(name)")
+            .eq("inventory_item_id", after.id);
+
+          for (const use of uses || []) {
+            const needed = Number(use.quantity);
+            const wasMakeable = beforeStock >= needed;
+            const isMakeableNow = afterStock >= needed;
+            if (wasMakeable && !isMakeableNow && use.menu_items?.name) {
+              pushToast(`${use.menu_items.name} can't be made — out of ${after.name}.`, "warning");
+            }
+          }
+        }
+      )
       .subscribe();
 
     // invoice_line_items has no restaurant_id to filter server-side, so this
