@@ -3,6 +3,7 @@ import { UtensilsCrossed, Plus, ArrowLeft, X, Trash2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import type { Tables } from "../lib/database.types";
+import type { AutoCreatePOResult, CreatePOWithSupplierResult } from "../lib/rpc-types";
 import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
 import Modal from "../components/ui/Modal";
@@ -10,6 +11,12 @@ import Modal from "../components/ui/Modal";
 type MenuItem = Tables<"menu_items">;
 type InventoryItemLite = Pick<Tables<"inventory_items">, "id" | "name" | "unit">;
 type RecipeIngredient = Tables<"recipe_ingredients"> & { inventory_items: { name: string; unit: string } | null };
+
+interface AutoPOModalState {
+  tone: "success" | "info" | "pick-vendor";
+  text: string;
+  itemId?: string;
+}
 
 export default function MenuScreen() {
   const { restaurantId: RESTAURANT_ID } = useAuth();
@@ -24,11 +31,23 @@ export default function MenuScreen() {
   const [newDishPrice, setNewDishPrice] = useState("");
   const [addingDish, setAddingDish] = useState(false);
   const [showAddIngredient, setShowAddIngredient] = useState(false);
+
+  // "existing" picks from inventoryItems via the dropdown; "new" creates a
+  // brand-new inventory_items row first (e.g. salt, or anything never
+  // purchased/tracked before) - real gap this closes: previously there was
+  // no way to add an ingredient that wasn't already in inventory at all.
+  const [ingredientMode, setIngredientMode] = useState<"existing" | "new">("existing");
   const [newIngredientId, setNewIngredientId] = useState("");
   const [newIngredientQty, setNewIngredientQty] = useState("");
   const [newIngredientUnit, setNewIngredientUnit] = useState("");
   const [newIngredientNotes, setNewIngredientNotes] = useState("");
+  const [newItemName, setNewItemName] = useState("");
+  const [newItemPar, setNewItemPar] = useState("");
   const [addingIngredient, setAddingIngredient] = useState(false);
+
+  const [autoPOModal, setAutoPOModal] = useState<AutoPOModalState | null>(null);
+  const [vendorPickerList, setVendorPickerList] = useState<{ id: string; name: string }[]>([]);
+  const [vendorPickerLoading, setVendorPickerLoading] = useState(false);
 
   useEffect(() => {
     load();
@@ -107,23 +126,100 @@ export default function MenuScreen() {
     setAddingDish(false);
   }
 
-  async function addIngredient() {
-    if (!newIngredientId || !newIngredientQty || !selectedItem) return;
-    setAddingIngredient(true);
-    await supabase.from("recipe_ingredients").insert({
-      menu_item_id: selectedItem.id,
-      inventory_item_id: newIngredientId,
-      quantity: Number(newIngredientQty),
-      unit: newIngredientUnit.trim() || null,
-      notes: newIngredientNotes.trim() || null,
-    });
+  function resetIngredientForm() {
+    setIngredientMode("existing");
     setNewIngredientId("");
     setNewIngredientQty("");
     setNewIngredientUnit("");
     setNewIngredientNotes("");
+    setNewItemName("");
+    setNewItemPar("");
+  }
+
+  async function addIngredient() {
+    if (!newIngredientQty || !selectedItem || !RESTAURANT_ID) return;
+    if (ingredientMode === "existing" && !newIngredientId) return;
+    if (ingredientMode === "new" && !newItemName.trim()) return;
+
+    setAddingIngredient(true);
+    let inventoryItemId = newIngredientId;
+    let justCreatedWithPar = false;
+
+    if (ingredientMode === "new") {
+      const parValue = newItemPar ? Number(newItemPar) : null;
+      const { data: createdItem, error: createError } = await supabase
+        .from("inventory_items")
+        .insert({
+          restaurant_id: RESTAURANT_ID,
+          name: newItemName.trim(),
+          unit: newIngredientUnit.trim() || "ea",
+          current_stock: 0,
+          par_level: parValue,
+        })
+        .select("id")
+        .single();
+
+      if (createError || !createdItem) {
+        setAddingIngredient(false);
+        return;
+      }
+      inventoryItemId = createdItem.id;
+      justCreatedWithPar = parValue !== null;
+    }
+
+    await supabase.from("recipe_ingredients").insert({
+      menu_item_id: selectedItem.id,
+      inventory_item_id: inventoryItemId,
+      quantity: Number(newIngredientQty),
+      unit: newIngredientUnit.trim() || null,
+      notes: newIngredientNotes.trim() || null,
+    });
+
     setShowAddIngredient(false);
     setAddingIngredient(false);
     loadRecipe(selectedItem.id);
+    load();
+
+    // A brand-new item starts at 0 stock - if a par level was also set for
+    // it right here, it's below par from the moment it exists, so run the
+    // same auto-PO check used everywhere else in the app rather than
+    // silently leaving it below par with no order placed.
+    if (justCreatedWithPar) {
+      const { data: poResult } = await supabase.rpc("auto_create_po_if_needed", { p_inventory_item_id: inventoryItemId });
+      const typedResult = poResult as AutoCreatePOResult | null;
+      if (typedResult?.created) {
+        setAutoPOModal({ tone: "success", text: `${typedResult.po_number} created — ordered ${typedResult.quantity} ${typedResult.unit} of ${typedResult.item_name} from ${typedResult.supplier_name}.` });
+      } else if (typedResult?.reason === "no_known_supplier") {
+        setVendorPickerLoading(true);
+        setAutoPOModal({ tone: "pick-vendor", itemId: inventoryItemId, text: "This is a new item with no supplier on file yet — who should this order go to?" });
+        const { data: suppliers } = await supabase.from("suppliers").select("id, name").eq("restaurant_id", RESTAURANT_ID).order("name");
+        setVendorPickerList(suppliers || []);
+        setVendorPickerLoading(false);
+      }
+      // "already_open" and "not_below_par" need no follow-up here - a
+      // brand-new item can't already have an open PO, and if this branch
+      // ran at all a par was set, so "not_below_par" only fires if
+      // current_stock somehow already exceeded par, an edge case not
+      // worth a modal for.
+    }
+
+    resetIngredientForm();
+  }
+
+  async function assignSupplierAndCreatePO(supplierId: string) {
+    if (!autoPOModal?.itemId) return;
+    setVendorPickerLoading(true);
+    const { data: result } = await supabase.rpc("create_po_for_item_with_supplier", {
+      p_inventory_item_id: autoPOModal.itemId,
+      p_supplier_id: supplierId,
+    });
+    const typedResult = result as CreatePOWithSupplierResult | null;
+    if (typedResult?.created) {
+      setAutoPOModal({ tone: "success", text: `${typedResult.po_number} created — ordered ${typedResult.quantity} ${typedResult.unit} of ${typedResult.item_name} from ${typedResult.supplier_name}.` });
+    } else {
+      setAutoPOModal({ tone: "info", text: "Couldn't create the order — try again from the Reorder screen." });
+    }
+    setVendorPickerLoading(false);
   }
 
   async function removeIngredient(id: string) {
@@ -144,6 +240,38 @@ export default function MenuScreen() {
   if (selectedItem) {
     return (
       <div className="font-sans pb-6">
+        {autoPOModal && (
+          <Modal onClose={() => setAutoPOModal(null)} maxWidth={360}>
+            <div className="text-sm text-ink leading-normal mb-4">{autoPOModal.text}</div>
+
+            {autoPOModal.tone === "pick-vendor" && (
+              <div className="flex flex-col gap-1.5 mb-3.5 max-h-[220px] overflow-y-auto">
+                {vendorPickerLoading && <div className="text-sm text-slate text-center p-2">Loading…</div>}
+                {!vendorPickerLoading && vendorPickerList.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => assignSupplierAndCreatePO(s.id)}
+                    className="w-full text-left bg-surface-alt border border-border rounded-lg px-3 py-2.5 text-ink text-sm cursor-pointer"
+                  >
+                    {s.name}
+                  </button>
+                ))}
+                {!vendorPickerLoading && vendorPickerList.length === 0 && (
+                  <div className="text-xs text-slate text-center p-2">No vendors on file yet — add one in Invoices → History.</div>
+                )}
+              </div>
+            )}
+
+            <Button
+              variant={autoPOModal.tone === "pick-vendor" ? "secondary" : "primary"}
+              onClick={() => setAutoPOModal(null)}
+              className="w-full !text-sm"
+            >
+              {autoPOModal.tone === "pick-vendor" ? "None of these — skip for now" : "OK"}
+            </Button>
+          </Modal>
+        )}
+
         <div className="pt-6 px-5 pb-2 flex items-center gap-3">
           <button onClick={() => setSelectedItem(null)} className="bg-transparent border-none cursor-pointer text-slate p-0">
             <ArrowLeft size={20} />
@@ -183,22 +311,57 @@ export default function MenuScreen() {
         </div>
 
         {showAddIngredient && (
-          <Modal onClose={() => setShowAddIngredient(false)} maxWidth={340}>
+          <Modal onClose={() => { setShowAddIngredient(false); resetIngredientForm(); }} maxWidth={340}>
             <div className="text-xs uppercase tracking-wide text-slate mb-3">Add ingredient</div>
-            <select
-              value={newIngredientId}
-              onChange={(e) => {
-                setNewIngredientId(e.target.value);
-                const item = inventoryItems.find((i) => i.id === e.target.value);
-                if (item) setNewIngredientUnit(item.unit);
-              }}
-              className="w-full bg-input-bg border border-border-strong rounded-lg px-3 py-2.5 text-sm text-ink mb-2"
-            >
-              <option value="">Select an ingredient…</option>
-              {inventoryItems.map((i) => (
-                <option key={i.id} value={i.id}>{i.name}</option>
-              ))}
-            </select>
+
+            <div className="flex gap-2 mb-3">
+              <button
+                onClick={() => setIngredientMode("existing")}
+                className={`flex-1 rounded-lg py-2 text-xs font-bold border ${ingredientMode === "existing" ? "bg-accent text-white border-accent" : "bg-surface-alt text-slate border-border"}`}
+              >
+                Existing item
+              </button>
+              <button
+                onClick={() => setIngredientMode("new")}
+                className={`flex-1 rounded-lg py-2 text-xs font-bold border ${ingredientMode === "new" ? "bg-accent text-white border-accent" : "bg-surface-alt text-slate border-border"}`}
+              >
+                New item
+              </button>
+            </div>
+
+            {ingredientMode === "existing" ? (
+              <select
+                value={newIngredientId}
+                onChange={(e) => {
+                  setNewIngredientId(e.target.value);
+                  const item = inventoryItems.find((i) => i.id === e.target.value);
+                  if (item) setNewIngredientUnit(item.unit);
+                }}
+                className="w-full bg-input-bg border border-border-strong rounded-lg px-3 py-2.5 text-sm text-ink mb-2"
+              >
+                <option value="">Select an ingredient…</option>
+                {inventoryItems.map((i) => (
+                  <option key={i.id} value={i.id}>{i.name}</option>
+                ))}
+              </select>
+            ) : (
+              <>
+                <input
+                  placeholder="New item name — e.g. Salt"
+                  value={newItemName}
+                  onChange={(e) => setNewItemName(e.target.value)}
+                  className="w-full bg-input-bg border border-border-strong rounded-lg px-3 py-2.5 text-sm text-ink mb-2"
+                />
+                <input
+                  type="number"
+                  placeholder="Par level (optional) — enables auto-reordering"
+                  value={newItemPar}
+                  onChange={(e) => setNewItemPar(e.target.value)}
+                  className="w-full bg-input-bg border border-border-strong rounded-lg px-3 py-2.5 text-sm text-ink mb-2"
+                />
+              </>
+            )}
+
             <div className="flex gap-2 mb-2">
               <input
                 type="number"
@@ -220,7 +383,11 @@ export default function MenuScreen() {
               onChange={(e) => setNewIngredientNotes(e.target.value)}
               className="w-full bg-input-bg border border-border-strong rounded-lg px-3 py-2.5 text-sm text-ink mb-3"
             />
-            <Button onClick={addIngredient} disabled={addingIngredient || !newIngredientId || !newIngredientQty} className="w-full">
+            <Button
+              onClick={addIngredient}
+              disabled={addingIngredient || !newIngredientQty || (ingredientMode === "existing" ? !newIngredientId : !newItemName.trim())}
+              className="w-full"
+            >
               {addingIngredient ? "Adding…" : "Add"}
             </Button>
           </Modal>
