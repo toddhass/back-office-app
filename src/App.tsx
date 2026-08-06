@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
-import { Camera, Receipt, ClipboardList, LogOut, Home, ChevronDown, ChefHat, UtensilsCrossed, X } from "lucide-react";
+import { Camera, Receipt, ClipboardList, LogOut, Home, ChevronDown, ChefHat, UtensilsCrossed, X, CheckCircle2, AlertTriangle, Bell } from "lucide-react";
 import HomeScreen from "./screens/HomeScreen";
 import PresenceIndicator from "./components/PresenceIndicator";
 import CaptureScreen from "./screens/CaptureScreen";
@@ -14,7 +14,7 @@ import { useAuth } from "./lib/AuthContext";
 import { supabase } from "./lib/supabaseClient";
 import { useIsDesktop } from "./lib/useIsDesktop";
 import { useNotifications } from "./lib/useNotifications";
-import { bg, sans, textMuted, accent, card, textPrimary, border } from "./lib/tokens";
+import { bg, sans, textMuted, accent, card, textPrimary, border, good, danger, goodBg, dangerBg, accentBg } from "./lib/tokens";
 
 function RestaurantSwitcher({ restaurants, restaurantId, restaurantName, onSwitch, style }) {
   if (restaurants.length <= 1) {
@@ -74,10 +74,10 @@ function ToastStack({ toasts, onDismiss }) {
   }, [toasts, onDismiss]);
 
   if (toasts.length === 0) return null;
-  const toneColors = {
-    success: { bg: "#E7F0FA", border: accent, text: accent },
-    warning: { bg: "#FDECEC", border: "#F3B8B8", text: "#B23B3B" },
-    info: { bg: "#F1F4F8", border: "#D6DCE5", text: textMuted },
+  const toneStyles = {
+    success: { iconBg: goodBg, iconColor: good, barColor: good, Icon: CheckCircle2 },
+    warning: { iconBg: dangerBg, iconColor: danger, barColor: danger, Icon: AlertTriangle },
+    info: { iconBg: accentBg, iconColor: accent, barColor: accent, Icon: Bell },
   };
 
   // Capped at 3 visible at once - a burst of events (several items
@@ -85,9 +85,10 @@ function ToastStack({ toasts, onDismiss }) {
   // unbounded pile of banners down the screen. Everything in the
   // underlying array still gets its own timer and will clear in turn.
   return (
-    <div style={{ position: "fixed", top: 12, left: 0, right: 0, zIndex: 2000, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "0 16px", pointerEvents: "none" }}>
+    <div style={{ position: "fixed", top: 12, left: 0, right: 0, zIndex: 2000, display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "0 16px", pointerEvents: "none" }}>
       {toasts.slice(0, 3).map((t) => {
-        const c = toneColors[t.tone] || toneColors.info;
+        const s = toneStyles[t.tone] || toneStyles.info;
+        const Icon = s.Icon;
         return (
           <div
             key={t.id}
@@ -96,20 +97,24 @@ function ToastStack({ toasts, onDismiss }) {
               width: "100%",
               maxWidth: 400,
               background: "#FFFFFF",
-              borderRadius: 10,
-              padding: "12px 14px",
-              borderLeft: `4px solid ${c.text}`,
-              boxShadow: "0 6px 20px rgba(0,0,0,0.15)",
-              display: "flex",
-              alignItems: "flex-start",
-              gap: 10,
-              animation: "bannerSlideIn 0.25s ease-out",
+              borderRadius: 14,
+              boxShadow: "0 10px 28px rgba(16,24,40,0.14), 0 2px 6px rgba(16,24,40,0.06)",
+              overflow: "hidden",
+              animation: "bannerSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
             }}
           >
-            <div style={{ flex: 1, fontSize: 13, color: textPrimary, lineHeight: 1.4 }}>{t.text}</div>
-            <button onClick={() => onDismiss(t.id)} style={{ background: "none", border: "none", cursor: "pointer", color: textMuted, padding: 0, flexShrink: 0, display: "flex" }}>
-              <X size={14} />
-            </button>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "13px 14px" }}>
+              <div style={{ width: 30, height: 30, borderRadius: "50%", background: s.iconBg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Icon size={16} color={s.iconColor} strokeWidth={2.25} />
+              </div>
+              <div style={{ flex: 1, fontSize: 13.5, color: textPrimary, lineHeight: 1.45, paddingTop: 4 }}>{t.text}</div>
+              <button onClick={() => onDismiss(t.id)} style={{ background: "none", border: "none", cursor: "pointer", color: textMuted, padding: 4, flexShrink: 0, display: "flex", opacity: 0.6 }}>
+                <X size={14} />
+              </button>
+            </div>
+            <div style={{ height: 3, background: "#F1F4F8" }}>
+              <div style={{ height: "100%", background: s.barColor, opacity: 0.55, animation: "toastCountdown 6s linear forwards" }} />
+            </div>
           </div>
         );
       })}
