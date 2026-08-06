@@ -66,6 +66,7 @@ export type Database = {
           created_at: string | null
           current_stock: number | null
           embedding: string | null
+          grams_per_unit: number | null
           id: string
           last_reorder_sent_at: string | null
           name: string
@@ -80,6 +81,7 @@ export type Database = {
           created_at?: string | null
           current_stock?: number | null
           embedding?: string | null
+          grams_per_unit?: number | null
           id?: string
           last_reorder_sent_at?: string | null
           name: string
@@ -94,6 +96,7 @@ export type Database = {
           created_at?: string | null
           current_stock?: number | null
           embedding?: string | null
+          grams_per_unit?: number | null
           id?: string
           last_reorder_sent_at?: string | null
           name?: string
