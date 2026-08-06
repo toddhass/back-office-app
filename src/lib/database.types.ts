@@ -876,6 +876,10 @@ export type Database = {
             }
             Returns: string
           }
+      confirm_invoice_and_post: {
+        Args: { p_invoice_id: string }
+        Returns: Json
+      }
       create_invite: {
         Args: { p_restaurant_id: string; p_role?: string }
         Returns: string
