@@ -219,6 +219,7 @@ export default function HomeScreen() {
       .on("postgres_changes", { event: "*", schema: "public", table: "invoices", filter: `restaurant_id=eq.${RESTAURANT_ID}` }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "purchase_orders", filter: `restaurant_id=eq.${RESTAURANT_ID}` }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "purchase_order_items" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "waste_saved_log", filter: `restaurant_id=eq.${RESTAURANT_ID}` }, () => load())
       .subscribe();
 
     return () => {
