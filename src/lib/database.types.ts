@@ -899,6 +899,10 @@ export type Database = {
         Args: { p_restaurant_id: string }
         Returns: Json
       }
+      get_menu_costing: {
+        Args: { p_restaurant_id: string }
+        Returns: Json
+      }
       get_open_po_line_for_item: {
         Args: { p_inventory_item_id: string }
         Returns: Json

@@ -13,6 +13,25 @@ type MenuItem = Tables<"menu_items">;
 type InventoryItemLite = Pick<Tables<"inventory_items">, "id" | "name" | "unit">;
 type RecipeIngredient = Tables<"recipe_ingredients"> & { inventory_items: { name: string; unit: string } | null };
 
+interface DishCostIngredient {
+  name: string;
+  quantity: number;
+  unit: string;
+  unit_price: number | null;
+  line_cost: number | null;
+}
+
+interface DishCosting {
+  id: string;
+  name: string;
+  category: string | null;
+  price: number | null;
+  total_cost: number | null;
+  cost_complete: boolean;
+  margin_percent: number | null;
+  ingredients: DishCostIngredient[];
+}
+
 interface AutoPOModalState {
   tone: "success" | "info" | "pick-vendor";
   text: string;
@@ -26,6 +45,7 @@ export default function MenuScreen() {
   const [loading, setLoading] = useState(true);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [inventoryItems, setInventoryItems] = useState<InventoryItemLite[]>([]);
+  const [costing, setCosting] = useState<Record<string, DishCosting>>({});
   // Derived from the URL, not local state - /menu/:dishId IS the selection,
   // so a refresh or a shared link lands on the same dish instead of
   // silently falling back to the list.
@@ -78,6 +98,7 @@ export default function MenuScreen() {
       .on("postgres_changes", { event: "*", schema: "public", table: "menu_items", filter: `restaurant_id=eq.${RESTAURANT_ID}` }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "recipe_ingredients" }, () => {
         if (selectedItem) loadRecipe(selectedItem.id);
+        load();
       })
       .subscribe();
     return () => {
@@ -102,6 +123,13 @@ export default function MenuScreen() {
       .eq("restaurant_id", RESTAURANT_ID)
       .order("name");
     setInventoryItems(inv || []);
+
+    const { data: costData } = await supabase.rpc("get_menu_costing", { p_restaurant_id: RESTAURANT_ID });
+    const costList = (costData as unknown as DishCosting[]) || [];
+    const costMap: Record<string, DishCosting> = {};
+    costList.forEach((c) => { costMap[c.id] = c; });
+    setCosting(costMap);
+
     setLoading(false);
   }
 
@@ -307,6 +335,49 @@ export default function MenuScreen() {
           </div>
         </div>
 
+        {(() => {
+          const c = costing[selectedItem.id];
+          if (!c || c.ingredients.length === 0) return null;
+          return (
+            <div className="px-4 pt-3">
+              <div className="text-xs uppercase tracking-wide text-slate font-semibold px-1 mb-1.5">Cost &amp; Margin</div>
+              <Card>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <div className="text-xs text-slate">Cost to make</div>
+                    <div className="text-lg font-bold text-ink font-mono">
+                      {c.cost_complete && c.total_cost != null ? `$${c.total_cost.toFixed(2)}` : "incomplete"}
+                    </div>
+                  </div>
+                  {c.cost_complete && c.margin_percent != null && (
+                    <div className="text-right">
+                      <div className="text-xs text-slate">Margin</div>
+                      <div className={`text-lg font-bold font-mono ${c.margin_percent >= 50 ? "text-good" : c.margin_percent >= 0 ? "text-accent" : "text-danger"}`}>
+                        {c.margin_percent}%
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {!c.cost_complete && (
+                  <div className="text-xs text-slate italic mb-3">
+                    One or more ingredients has no purchase history yet, so cost can't be calculated until it's been ordered at least once.
+                  </div>
+                )}
+                <div className="flex flex-col gap-1.5">
+                  {c.ingredients.map((ing, i) => (
+                    <div key={i} className="flex items-center justify-between text-xs">
+                      <span className="text-ink">{ing.name} <span className="text-slate font-mono">({ing.quantity} {ing.unit})</span></span>
+                      <span className={`font-mono ${ing.line_cost == null ? "text-slate italic" : "text-slate"}`}>
+                        {ing.line_cost != null ? `$${ing.line_cost.toFixed(2)}` : "price unknown"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </div>
+          );
+        })()}
+
         <div className="px-4 pt-3 flex flex-col gap-2">
           <div className="text-xs uppercase tracking-wide text-slate font-semibold px-1">Recipe</div>
           {recipe.length === 0 && (
@@ -454,14 +525,28 @@ export default function MenuScreen() {
           <div key={category}>
             <div className="text-xs uppercase tracking-wide text-slate font-semibold px-1 mb-1.5">{category}</div>
             <div className="flex flex-col gap-2">
-              {items.map((item) => (
-                <button key={item.id} onClick={() => openDish(item)} className="text-left w-full">
-                  <Card className="flex items-center justify-between">
-                    <div className="text-sm text-ink font-medium">{item.name}</div>
-                    {item.price != null && <div className="text-sm text-slate font-mono">${Number(item.price).toFixed(2)}</div>}
-                  </Card>
-                </button>
-              ))}
+              {items.map((item) => {
+                const c = costing[item.id];
+                return (
+                  <button key={item.id} onClick={() => openDish(item)} className="text-left w-full">
+                    <Card className="flex items-center justify-between">
+                      <div className="text-sm text-ink font-medium">{item.name}</div>
+                      <div className="flex items-center gap-2">
+                        {c && (
+                          c.cost_complete && c.margin_percent != null ? (
+                            <span className={`text-xs font-mono px-1.5 py-0.5 rounded ${c.margin_percent >= 50 ? "bg-good-bg text-good" : c.margin_percent >= 0 ? "bg-accent-bg text-accent" : "bg-danger-bg text-danger"}`}>
+                              {c.margin_percent}% margin
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate italic">cost unknown</span>
+                          )
+                        )}
+                        {item.price != null && <div className="text-sm text-slate font-mono">${Number(item.price).toFixed(2)}</div>}
+                      </div>
+                    </Card>
+                  </button>
+                );
+              })}
             </div>
           </div>
         ))}
