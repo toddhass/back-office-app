@@ -790,6 +790,60 @@ export type Database = {
           },
         ]
       }
+      waste_log: {
+        Row: {
+          created_at: string | null
+          estimated_value: number | null
+          id: string
+          inventory_item_id: string | null
+          item_name_raw: string
+          logged_by_email: string | null
+          photo_url: string | null
+          quantity: number
+          restaurant_id: string
+          unit: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          estimated_value?: number | null
+          id?: string
+          inventory_item_id?: string | null
+          item_name_raw: string
+          logged_by_email?: string | null
+          photo_url?: string | null
+          quantity: number
+          restaurant_id: string
+          unit?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          estimated_value?: number | null
+          id?: string
+          inventory_item_id?: string | null
+          item_name_raw?: string
+          logged_by_email?: string | null
+          photo_url?: string | null
+          quantity?: number
+          restaurant_id?: string
+          unit?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "waste_log_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "waste_log_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       waste_saved_log: {
         Row: {
           created_at: string | null
@@ -908,6 +962,18 @@ export type Database = {
       }
       get_open_po_line_for_item: {
         Args: { p_inventory_item_id: string }
+        Returns: Json
+      }
+      log_waste: {
+        Args: {
+          p_inventory_item_id: string | null
+          p_item_name_raw: string
+          p_logged_by_email: string
+          p_photo_url: string | null
+          p_quantity: number
+          p_restaurant_id: string
+          p_unit: string
+        }
         Returns: Json
       }
       mark_item_used_before_waste: {
