@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { UtensilsCrossed, Plus, ArrowLeft, X, Trash2 } from "lucide-react";
+import { UtensilsCrossed, Plus, ArrowLeft, X, Trash2, Sparkles } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import type { Tables } from "../lib/database.types";
@@ -8,6 +8,7 @@ import type { AutoCreatePOResult, CreatePOWithSupplierResult } from "../lib/rpc-
 import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
 import Modal from "../components/ui/Modal";
+import AskAgentModal from "./AskAgentModal";
 
 type MenuItem = Tables<"menu_items">;
 type InventoryItemLite = Pick<Tables<"inventory_items">, "id" | "name" | "unit">;
@@ -79,6 +80,7 @@ export default function MenuScreen() {
   const [addingIngredient, setAddingIngredient] = useState(false);
 
   const [autoPOModal, setAutoPOModal] = useState<AutoPOModalState | null>(null);
+  const [showAskAgent, setShowAskAgent] = useState(false);
   const [vendorPickerList, setVendorPickerList] = useState<{ id: string; name: string }[]>([]);
   const [vendorPickerLoading, setVendorPickerLoading] = useState(false);
 
@@ -507,6 +509,17 @@ export default function MenuScreen() {
             </Button>
           </Modal>
         )}
+
+        <button
+          onClick={() => setShowAskAgent(true)}
+          className="fixed bottom-[84px] right-5 w-14 h-14 rounded-full bg-accent border-none flex items-center justify-center cursor-pointer shadow-[0_4px_14px_rgba(30,91,140,0.4)] z-[500]"
+          aria-label="Ask about your menu"
+        >
+          <Sparkles size={22} color="#FFFFFF" />
+        </button>
+        {showAskAgent && RESTAURANT_ID && (
+          <AskAgentModal restaurantId={RESTAURANT_ID} healthyPercent={null} onClose={() => setShowAskAgent(false)} />
+        )}
       </div>
     );
   }
@@ -594,6 +607,17 @@ export default function MenuScreen() {
             {addingDish ? "Adding…" : "Add dish"}
           </Button>
         </Modal>
+      )}
+
+      <button
+        onClick={() => setShowAskAgent(true)}
+        className="fixed bottom-[84px] right-5 w-14 h-14 rounded-full bg-accent border-none flex items-center justify-center cursor-pointer shadow-[0_4px_14px_rgba(30,91,140,0.4)] z-[500]"
+        aria-label="Ask about your menu"
+      >
+        <Sparkles size={22} color="#FFFFFF" />
+      </button>
+      {showAskAgent && RESTAURANT_ID && (
+        <AskAgentModal restaurantId={RESTAURANT_ID} healthyPercent={null} onClose={() => setShowAskAgent(false)} />
       )}
     </div>
   );
