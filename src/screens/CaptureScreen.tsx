@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, lazy, Suspense } from "react";
-import { Camera, ImageIcon, Loader2, CheckCircle2, XCircle, RotateCcw, Copy, QrCode, X, ScanLine } from "lucide-react";
+import { Camera, ImageIcon, Loader2, CheckCircle2, XCircle, RotateCcw, Copy, QrCode, X, ScanLine, Trash2 } from "lucide-react";
 import jsQR from "jsqr";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
@@ -9,6 +9,7 @@ import { card, textPrimary, textMuted, accent, danger, good, mono } from "../lib
 // @zxing/browser adds ~450kB on its own - only worth loading the moment
 // someone actually taps this button, not on every visit to Capture.
 const BarcodeScannerModal = lazy(() => import("./BarcodeScannerModal"));
+const WasteLogModal = lazy(() => import("./WasteLogModal"));
 
 interface CaptureResult {
   supplier: string;
@@ -54,6 +55,7 @@ export default function CaptureScreen({ onDone }: { onDone: () => void }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [scanning, setScanning] = useState(false);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+  const [showWasteLog, setShowWasteLog] = useState(false);
   const [scanError, setScanError] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -389,6 +391,25 @@ export default function CaptureScreen({ onDone }: { onDone: () => void }) {
               <ScanLine size={15} />
               Look up an item by barcode
             </button>
+            <button
+              onClick={() => setShowWasteLog(true)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                background: "none",
+                border: "1px solid #E2E6ED",
+                borderRadius: 10,
+                padding: "14px",
+                cursor: "pointer",
+                color: textMuted,
+                fontSize: 13,
+              }}
+            >
+              <Trash2 size={15} />
+              Log food waste from a photo
+            </button>
             {scanError && <div style={{ color: danger, fontSize: 12, textAlign: "center" }}>{scanError}</div>}
           </div>
         )}
@@ -531,6 +552,11 @@ export default function CaptureScreen({ onDone }: { onDone: () => void }) {
       {showBarcodeScanner && RESTAURANT_ID && (
         <Suspense fallback={null}>
           <BarcodeScannerModal restaurantId={RESTAURANT_ID} onClose={() => setShowBarcodeScanner(false)} />
+        </Suspense>
+      )}
+      {showWasteLog && RESTAURANT_ID && (
+        <Suspense fallback={null}>
+          <WasteLogModal restaurantId={RESTAURANT_ID} onClose={() => setShowWasteLog(false)} />
         </Suspense>
       )}
     </div>
