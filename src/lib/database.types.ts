@@ -964,6 +964,10 @@ export type Database = {
         Args: { p_inventory_item_id: string }
         Returns: Json
       }
+      get_prior_price: {
+        Args: { p_exclude_line_item_id: string; p_inventory_item_id: string; p_restaurant_id: string }
+        Returns: number
+      }
       log_waste: {
         Args: {
           p_inventory_item_id: string | null

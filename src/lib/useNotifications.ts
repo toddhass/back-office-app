@@ -158,28 +158,30 @@ export function useNotifications(restaurantId: string | null) {
           const inventoryItemId: string = after.inventory_item_id!;
           const newPriceValue: number = after.unit_price!;
 
-          const { data: prior } = await supabase
-            .from("invoice_line_items")
-            .select("unit_price, invoices!inner(invoice_date, restaurant_id)")
-            .eq("inventory_item_id", inventoryItemId)
-            .eq("invoices.restaurant_id", restaurantId)
-            .not("unit_price", "is", null)
-            .neq("id", after.id)
-            .order("invoice_date", { foreignTable: "invoices", ascending: false })
-            .limit(1)
-            .maybeSingle();
+          // Real RPC instead of a client-side embedded-resource filter
+          // (previously .eq("invoices.restaurant_id", ...) combined with
+          // an !inner join) - that syntax's actual behavior in
+          // supabase-js couldn't be verified from here (no way to
+          // execute real client JS against the deployed app), so this
+          // moved to SQL that was directly tested and confirmed correct
+          // against real data instead of trusted on inspection alone.
+          const { data: priorPrice } = await supabase.rpc("get_prior_price", {
+            p_inventory_item_id: inventoryItemId,
+            p_restaurant_id: restaurantId,
+            p_exclude_line_item_id: after.id,
+          });
 
-          if (!prior?.unit_price) return; // no prior price to compare against yet
-          const priorPrice = Number(prior.unit_price);
+          if (priorPrice == null) return; // no prior price to compare against yet
+          const priorPriceNum = Number(priorPrice);
           const newPrice = Number(newPriceValue);
-          if (priorPrice <= 0) return;
-          const pctChange = ((newPrice - priorPrice) / priorPrice) * 100;
+          if (priorPriceNum <= 0) return;
+          const pctChange = ((newPrice - priorPriceNum) / priorPriceNum) * 100;
 
           if (Math.abs(pctChange) >= 10) {
             const { data: item } = await supabase.from("inventory_items").select("name").eq("id", inventoryItemId).maybeSingle();
             const direction = pctChange > 0 ? "up" : "down";
             pushToast(
-              `${item?.name || "An item"}'s price is ${direction} ${Math.abs(Math.round(pctChange))}% — $${priorPrice.toFixed(2)} → $${newPrice.toFixed(2)}.`,
+              `${item?.name || "An item"}'s price is ${direction} ${Math.abs(Math.round(pctChange))}% — $${priorPriceNum.toFixed(2)} → $${newPrice.toFixed(2)}.`,
               pctChange > 0 ? "warning" : "success"
             );
           }
