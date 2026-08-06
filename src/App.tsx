@@ -1,6 +1,7 @@
 import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import { Camera, Receipt, ClipboardList, LogOut, Home, ChevronDown, ChefHat, UtensilsCrossed } from "lucide-react";
 import HomeScreen from "./screens/HomeScreen";
+import PresenceIndicator from "./components/PresenceIndicator";
 import CaptureScreen from "./screens/CaptureScreen";
 import InvoicesScreen from "./screens/InvoicesScreen";
 import DigestScreen from "./screens/DigestScreen";
@@ -143,6 +144,7 @@ export default function App() {
               onSwitch={handleSwitch}
               style={{ fontWeight: 700, fontSize: 15, letterSpacing: -0.2, color: textPrimary }}
             />
+            <PresenceIndicator restaurantId={restaurantId} style={{ marginTop: 6 }} />
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {tabs.map(({ path, label, icon: Icon }) => (
@@ -207,12 +209,15 @@ export default function App() {
             onSwitch={handleSwitch}
             style={{ fontSize: 12, color: textPrimary, fontWeight: 600 }}
           />
-          <button
-            onClick={() => supabase.auth.signOut()}
-            style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 11 }}
-          >
-            <LogOut size={12} /> Sign out
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <PresenceIndicator restaurantId={restaurantId} />
+            <button
+              onClick={() => supabase.auth.signOut()}
+              style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 11 }}
+            >
+              <LogOut size={12} /> Sign out
+            </button>
+          </div>
         </div>
         <div style={{ paddingBottom: 76 }}>{activeScreen}</div>
 
