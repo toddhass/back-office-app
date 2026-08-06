@@ -100,6 +100,16 @@ export default function MenuScreen() {
         if (selectedItem) loadRecipe(selectedItem.id);
         load();
       })
+      // Margins are computed from each ingredient's most recent real
+      // invoice price - without this, confirming a new invoice with a
+      // different price wouldn't be reflected until the screen reloaded.
+      // No restaurant_id filter here since invoice_line_items doesn't
+      // have that column directly (same reason InvoicesScreen's own
+      // subscription to this table has none) - load() re-fetches
+      // get_menu_costing() either way, which is itself correctly scoped
+      // server-side, so an event from another restaurant just costs an
+      // extra harmless refetch, not a correctness issue.
+      .on("postgres_changes", { event: "*", schema: "public", table: "invoice_line_items" }, () => load())
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
