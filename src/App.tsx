@@ -1,5 +1,6 @@
+import { useEffect, useRef } from "react";
 import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
-import { Camera, Receipt, ClipboardList, LogOut, Home, ChevronDown, ChefHat, UtensilsCrossed } from "lucide-react";
+import { Camera, Receipt, ClipboardList, LogOut, Home, ChevronDown, ChefHat, UtensilsCrossed, X } from "lucide-react";
 import HomeScreen from "./screens/HomeScreen";
 import PresenceIndicator from "./components/PresenceIndicator";
 import CaptureScreen from "./screens/CaptureScreen";
@@ -42,28 +43,76 @@ function RestaurantSwitcher({ restaurants, restaurantId, restaurantName, onSwitc
   );
 }
 
+// Non-blocking, auto-dismissing - deliberately not the earlier full-screen
+// modal-with-OK-button design. With 3-10 people using the app at once,
+// every session independently notices the same real event (nothing shared
+// about dismissal - see PresenceIndicator's docs for why that's true of
+// realtime in general), so requiring an explicit click on every single
+// screen for every single event doesn't scale past one person. Auto-clears
+// on its own timer instead; a manual close (X) is still there for anyone
+// who wants it gone sooner, but nothing requires it.
 function ToastStack({ toasts, onDismiss }) {
+  const timersRef = useRef({});
+
+  useEffect(() => {
+    toasts.forEach((t) => {
+      if (!timersRef.current[t.id]) {
+        timersRef.current[t.id] = setTimeout(() => {
+          onDismiss(t.id);
+          delete timersRef.current[t.id];
+        }, 6000);
+      }
+    });
+    // A toast that left the array (dismissed manually, or by this same
+    // timeout elsewhere) shouldn't leave an orphaned timer behind.
+    Object.keys(timersRef.current).forEach((id) => {
+      if (!toasts.some((t) => String(t.id) === id)) {
+        clearTimeout(timersRef.current[id]);
+        delete timersRef.current[id];
+      }
+    });
+  }, [toasts, onDismiss]);
+
   if (toasts.length === 0) return null;
-  const current = toasts[0]; // show one at a time, oldest first
   const toneColors = {
     success: { bg: "#E7F0FA", border: accent, text: accent },
     warning: { bg: "#FDECEC", border: "#F3B8B8", text: "#B23B3B" },
     info: { bg: "#F1F4F8", border: "#D6DCE5", text: textMuted },
   };
-  const c = toneColors[current.tone] || toneColors.info;
+
+  // Capped at 3 visible at once - a burst of events (several items
+  // crossing below par from one big depletion, say) shouldn't stack an
+  // unbounded pile of banners down the screen. Everything in the
+  // underlying array still gets its own timer and will clear in turn.
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, animation: "backdropFadeIn 0.15s ease-out" }}>
-      <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, width: "100%", maxWidth: 360, borderTop: `4px solid ${c.text}`, animation: "modalPopIn 0.25s ease-out" }}>
-        <div style={{ fontSize: 15, color: textPrimary, lineHeight: 1.5, marginBottom: 16 }}>
-          {current.text}
-        </div>
-        <button
-          onClick={() => onDismiss(current.id)}
-          style={{ width: "100%", background: c.text, border: "none", borderRadius: 8, padding: "11px", color: "#FFFFFF", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
-        >
-          OK{toasts.length > 1 ? ` (${toasts.length - 1} more)` : ""}
-        </button>
-      </div>
+    <div style={{ position: "fixed", top: 12, left: 0, right: 0, zIndex: 2000, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "0 16px", pointerEvents: "none" }}>
+      {toasts.slice(0, 3).map((t) => {
+        const c = toneColors[t.tone] || toneColors.info;
+        return (
+          <div
+            key={t.id}
+            style={{
+              pointerEvents: "auto",
+              width: "100%",
+              maxWidth: 400,
+              background: "#FFFFFF",
+              borderRadius: 10,
+              padding: "12px 14px",
+              borderLeft: `4px solid ${c.text}`,
+              boxShadow: "0 6px 20px rgba(0,0,0,0.15)",
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 10,
+              animation: "bannerSlideIn 0.25s ease-out",
+            }}
+          >
+            <div style={{ flex: 1, fontSize: 13, color: textPrimary, lineHeight: 1.4 }}>{t.text}</div>
+            <button onClick={() => onDismiss(t.id)} style={{ background: "none", border: "none", cursor: "pointer", color: textMuted, padding: 0, flexShrink: 0, display: "flex" }}>
+              <X size={14} />
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }
