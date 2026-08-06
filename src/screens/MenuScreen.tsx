@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { UtensilsCrossed, Plus, ArrowLeft, X, Trash2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
@@ -20,10 +21,15 @@ interface AutoPOModalState {
 
 export default function MenuScreen() {
   const { restaurantId: RESTAURANT_ID } = useAuth();
+  const { dishId } = useParams<{ dishId: string }>();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [inventoryItems, setInventoryItems] = useState<InventoryItemLite[]>([]);
-  const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
+  // Derived from the URL, not local state - /menu/:dishId IS the selection,
+  // so a refresh or a shared link lands on the same dish instead of
+  // silently falling back to the list.
+  const selectedItem = dishId ? menuItems.find((m) => m.id === dishId) || null : null;
   const [recipe, setRecipe] = useState<RecipeIngredient[]>([]);
   const [showAddDish, setShowAddDish] = useState(false);
   const [newDishName, setNewDishName] = useState("");
@@ -59,6 +65,11 @@ export default function MenuScreen() {
   useEffect(() => {
     load();
   }, [RESTAURANT_ID]);
+
+  useEffect(() => {
+    if (selectedItem) loadRecipe(selectedItem.id);
+    else setRecipe([]);
+  }, [selectedItem?.id]);
 
   useEffect(() => {
     if (!RESTAURANT_ID) return;
@@ -104,8 +115,7 @@ export default function MenuScreen() {
   }
 
   function openDish(item: MenuItem) {
-    setSelectedItem(item);
-    loadRecipe(item.id);
+    navigate(`/menu/${item.id}`);
   }
 
   async function addDish() {
@@ -245,6 +255,10 @@ export default function MenuScreen() {
     return acc;
   }, {});
 
+  if (dishId && loading) {
+    return <div className="font-sans pt-6 px-5 text-sm text-slate">Loading…</div>;
+  }
+
   if (selectedItem) {
     return (
       <div className="font-sans pb-6">
@@ -281,7 +295,7 @@ export default function MenuScreen() {
         )}
 
         <div className="pt-6 px-5 pb-2 flex items-center gap-3">
-          <button onClick={() => setSelectedItem(null)} className="bg-transparent border-none cursor-pointer text-slate p-0">
+          <button onClick={() => navigate("/menu")} className="bg-transparent border-none cursor-pointer text-slate p-0">
             <ArrowLeft size={20} />
           </button>
           <div>

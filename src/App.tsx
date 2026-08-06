@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import { Camera, Receipt, ClipboardList, LogOut, Home, ChevronDown, ChefHat, UtensilsCrossed } from "lucide-react";
 import HomeScreen from "./screens/HomeScreen";
 import CaptureScreen from "./screens/CaptureScreen";
@@ -69,7 +69,8 @@ function ToastStack({ toasts, onDismiss }) {
 
 export default function App() {
   const { session, restaurants, restaurantId, restaurantName, onboardingCompleted, switchRestaurant, loading } = useAuth();
-  const [tab, setTab] = useState("home");
+  const navigate = useNavigate();
+  const location = useLocation();
   const isDesktop = useIsDesktop();
   const { toasts, dismissToast } = useNotifications(restaurantId);
 
@@ -98,25 +99,35 @@ export default function App() {
 
   function handleSwitch(id) {
     switchRestaurant(id);
-    setTab("home");
+    navigate("/");
   }
 
   const tabs = [
-    { key: "home", label: "Home", icon: Home },
-    { key: "capture", label: "Capture", icon: Camera },
-    { key: "invoices", label: "Invoices", icon: Receipt },
-    { key: "digest", label: "Reorder", icon: ClipboardList },
-    { key: "kitchen", label: "Kitchen", icon: ChefHat },
-    { key: "menu", label: "Menu", icon: UtensilsCrossed },
+    { path: "/", label: "Home", icon: Home },
+    { path: "/capture", label: "Capture", icon: Camera },
+    { path: "/invoices", label: "Invoices", icon: Receipt },
+    { path: "/reorder", label: "Reorder", icon: ClipboardList },
+    { path: "/kitchen", label: "Kitchen", icon: ChefHat },
+    { path: "/menu", label: "Menu", icon: UtensilsCrossed },
   ];
 
-  const activeScreen =
-    tab === "home" ? <HomeScreen onNavigate={setTab} /> :
-    tab === "capture" ? <CaptureScreen onDone={() => setTab("invoices")} /> :
-    tab === "invoices" ? <InvoicesScreen /> :
-    tab === "kitchen" ? <KitchenScreen /> :
-    tab === "menu" ? <MenuScreen /> :
-    <DigestScreen />;
+  // startsWith rather than exact match so /menu/:dishId still highlights
+  // the Menu tab - nested detail routes are still "within" that section.
+  function isActive(path) {
+    return path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
+  }
+
+  const activeScreen = (
+    <Routes>
+      <Route path="/" element={<HomeScreen />} />
+      <Route path="/capture" element={<CaptureScreen onDone={() => navigate("/invoices")} />} />
+      <Route path="/invoices" element={<InvoicesScreen />} />
+      <Route path="/reorder" element={<DigestScreen />} />
+      <Route path="/kitchen" element={<KitchenScreen />} />
+      <Route path="/menu" element={<MenuScreen />} />
+      <Route path="/menu/:dishId" element={<MenuScreen />} />
+    </Routes>
+  );
 
   if (isDesktop) {
     return (
@@ -134,10 +145,10 @@ export default function App() {
             />
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {tabs.map(({ key, label, icon: Icon }) => (
+            {tabs.map(({ path, label, icon: Icon }) => (
               <button
-                key={key}
-                onClick={() => setTab(key)}
+                key={path}
+                onClick={() => navigate(path)}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -145,9 +156,9 @@ export default function App() {
                   padding: "10px 12px",
                   borderRadius: 8,
                   border: "none",
-                  background: tab === key ? "#E7F0FA" : "none",
-                  color: tab === key ? accent : textMuted,
-                  fontWeight: tab === key ? 600 : 500,
+                  background: isActive(path) ? "#E7F0FA" : "none",
+                  color: isActive(path) ? accent : textMuted,
+                  fontWeight: isActive(path) ? 600 : 500,
                   fontSize: 14,
                   cursor: "pointer",
                   textAlign: "left",
@@ -221,10 +232,10 @@ export default function App() {
             gap: 8,
           }}
         >
-          {tabs.map(({ key, label, icon: Icon }) => (
+          {tabs.map(({ path, label, icon: Icon }) => (
             <button
-              key={key}
-              onClick={() => setTab(key)}
+              key={path}
+              onClick={() => navigate(path)}
               style={{
                 flex: 1,
                 display: "flex",
@@ -235,7 +246,7 @@ export default function App() {
                 border: "none",
                 padding: "8px",
                 cursor: "pointer",
-                color: tab === key ? accent : textMuted,
+                color: isActive(path) ? accent : textMuted,
               }}
             >
               <Icon size={20} />

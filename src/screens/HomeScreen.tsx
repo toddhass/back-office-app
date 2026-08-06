@@ -1,4 +1,5 @@
 import { useEffect, useState, lazy, Suspense } from "react";
+import { useNavigate } from "react-router-dom";
 import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity, ChevronDown, ChevronUp, Pencil, Clock, Package, Leaf, ChefHat, Sparkles, ScanLine, X } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
@@ -171,7 +172,13 @@ function POCategorySection({ categoryKey, label, color, items, expandedCategory,
   );
 }
 
-export default function HomeScreen({ onNavigate }: { onNavigate: (tab: string) => void }) {
+export default function HomeScreen() {
+  const navigate = useNavigate();
+  // Kept as a local shim so the many onNavigate("digest") / ("kitchen") /
+  // etc. call sites below didn't all need touching individually - maps
+  // the old tab-key vocabulary onto real routes in one place.
+  const routeForTab: Record<string, string> = { digest: "/reorder", kitchen: "/kitchen", invoices: "/invoices", capture: "/capture" };
+  const onNavigate = (tabKey: string) => navigate(routeForTab[tabKey] || "/");
   const { restaurantId: RESTAURANT_ID, restaurantName } = useAuth();
   const [loading, setLoading] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
