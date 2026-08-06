@@ -114,6 +114,7 @@ export default function InvoicesScreen() {
   const [reopenConfirming, setReopenConfirming] = useState(false);
   const [reopenSummary, setReopenSummary] = useState<ReopenInvoiceResult | null>(null);
   const [reopenError, setReopenError] = useState("");
+  const [confirmError, setConfirmError] = useState("");
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
   const [lineItems, setLineItems] = useState<ReviewLineItem[]>([]);
   const [pendingList, setPendingList] = useState<PendingInvoice[]>([]);
@@ -457,8 +458,10 @@ export default function InvoicesScreen() {
   // time they change (which would happen if they were effect dependencies).
   const viewRef = useRef(view);
   const invoiceRef = useRef(invoice);
+  const confirmErrorRef = useRef(confirmError);
   useEffect(() => { viewRef.current = view; }, [view]);
   useEffect(() => { invoiceRef.current = invoice; }, [invoice]);
+  useEffect(() => { confirmErrorRef.current = confirmError; }, [confirmError]);
 
   // Live sync: refreshes whichever view is currently showing when the
   // underlying data changes - a new invoice arriving (another device, or
@@ -468,9 +471,32 @@ export default function InvoicesScreen() {
     if (!RESTAURANT_ID) return;
     const channel = supabase
       .channel(`invoices-${RESTAURANT_ID}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "invoices", filter: `restaurant_id=eq.${RESTAURANT_ID}` }, () => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "invoices", filter: `restaurant_id=eq.${RESTAURANT_ID}` }, (payload: { new?: { id?: string; status?: string; confirmed_by_email?: string } }) => {
         if (viewRef.current === "queue") loadPendingList();
         else if (viewRef.current === "history") loadHistory();
+        else if (viewRef.current === "detail") {
+          // The actual gap this closes: previously nothing told someone
+          // sitting on an invoice's detail view that it had just been
+          // confirmed elsewhere - they'd keep working on a page for an
+          // invoice that no longer needed it, and if they hit Confirm
+          // themselves, only found out via the atomic RPC's rejection
+          // after the fact. Now it's live: if THIS invoice just moved
+          // out of pending_review while being viewed, and it wasn't this
+          // browser tab's own confirm action (that path already shows
+          // its own message), say so immediately.
+          const currentInvoiceId = invoiceRef.current?.id;
+          if (currentInvoiceId && payload.new?.id === currentInvoiceId && payload.new?.status === "confirmed" && !confirmErrorRef.current) {
+            setConfirmError(
+              payload.new.confirmed_by_email
+                ? `Just confirmed by ${payload.new.confirmed_by_email} — returning to the queue.`
+                : "This invoice was just confirmed elsewhere — returning to the queue."
+            );
+            setTimeout(() => {
+              setView("queue");
+              loadPendingList();
+            }, 2500);
+          }
+        }
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "invoice_line_items" }, (payload: { new?: { invoice_id?: string } }) => {
         const currentInvoiceId = invoiceRef.current?.id;
@@ -606,38 +632,33 @@ export default function InvoicesScreen() {
 
   async function postToInventory() {
     if (!invoice) return;
-    // Bump stock for every matched line item, then close out the invoice
-    for (const item of lineItems) {
-      if (!item.inventory_item_id) continue;
-      const { data: current } = await supabase
-        .from("inventory_items")
-        .select("current_stock")
-        .eq("id", item.inventory_item_id)
-        .single();
-
-      const newStock = (current?.current_stock || 0) + (item.quantity || 0);
-
-      await supabase
-        .from("inventory_items")
-        .update({ current_stock: newStock, last_reorder_sent_at: null })
-        .eq("id", item.inventory_item_id);
-      await supabase.from("stock_transactions").insert({
-        inventory_item_id: item.inventory_item_id,
-        change: item.quantity || 0,
-        source: "invoice",
-        reference_id: invoice.id,
-      });
+    setConfirmError("");
+    // Single atomic call, not the previous multi-step sequence (separate
+    // SELECT + UPDATE per line item, then a final invoices UPDATE) - that
+    // had a real race: two people with this same invoice open, both
+    // confirming close together, would both pass through and double-post
+    // stock for every line item with zero warning. This RPC checks
+    // status = 'pending_review' as part of the same UPDATE that flips it
+    // to confirmed, so a second concurrent call safely detects it's
+    // already been handled instead of quietly repeating the work.
+    const { data, error } = await supabase.rpc("confirm_invoice_and_post", { p_invoice_id: invoice.id });
+    if (error) {
+      setConfirmError("Something went wrong confirming this invoice — try again.");
+      return;
     }
-    const { data: userData } = await supabase.auth.getUser();
-    await supabase
-      .from("invoices")
-      .update({
-        status: "confirmed",
-        confirmed_by: userData?.user?.id || null,
-        confirmed_by_email: userData?.user?.email || null,
-        confirmed_at: new Date().toISOString(),
-      })
-      .eq("id", invoice.id);
+    const result = data as { confirmed: boolean; reason?: string; items_posted?: number };
+    if (!result.confirmed) {
+      setConfirmError(
+        result.reason === "already_confirmed"
+          ? "This invoice was just confirmed — likely by someone else. Returning to the queue."
+          : "Couldn't confirm this invoice — it may have been removed."
+      );
+      setTimeout(() => {
+        setView("queue");
+        loadPendingList();
+      }, 2000);
+      return;
+    }
     setView("queue");
     loadPendingList();
   }
@@ -1525,6 +1546,7 @@ export default function InvoicesScreen() {
       )}
 
       <div style={{ padding: "18px 16px 8px" }}>
+        {confirmError && <div style={{ color: danger, fontSize: 12, marginBottom: 8, textAlign: "center" }}>{confirmError}</div>}
         <button
           onClick={postToInventory}
           disabled={!allResolved}
