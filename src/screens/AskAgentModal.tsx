@@ -57,12 +57,19 @@ export default function AskAgentModal({ restaurantId, healthyPercent, onClose }:
   async function ask(question: string) {
     if (!question.trim() || asking) return;
     setError("");
+    // Captured before the state update below adds this new question, so
+    // it's genuinely the history BEFORE this turn - the last few
+    // exchanges, not the running total, since only recent context matters
+    // for resolving a follow-up like "increase it" and an ever-growing
+    // history would just bloat every request for no benefit past a
+    // certain point.
+    const recentHistory = messages.slice(-6).map((m) => ({ role: m.role, text: m.text }));
     setMessages((prev) => [...prev, { role: "user", text: question }]);
     setInput("");
     setAsking(true);
 
     const { data, error: fnError } = await supabase.functions.invoke("ask-agent", {
-      body: { restaurant_id: restaurantId, question },
+      body: { restaurant_id: restaurantId, question, history: recentHistory },
     });
 
     if (fnError || !data?.answer) {
