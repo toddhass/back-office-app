@@ -135,6 +135,56 @@ export function useNotifications(restaurantId: string | null) {
           }
         }
       )
+      // A line item just became matched-and-priced (either at extraction
+      // time, or once match-line-items assigns inventory_item_id
+      // afterward) - real price history already exists per item from
+      // every past invoice, nobody was actually looking at it changing
+      // over time. Fires once per real transition (wasn't matched+priced
+      // before, is now), not on every subsequent edit to an already-priced
+      // line, avoiding a repeat alert for the same real event.
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "invoice_line_items" },
+        async (payload: RealtimePostgresChangesPayload<InvoiceLineItemRow>) => {
+          const before = payload.old;
+          const after = payload.new;
+          if (!after || !("inventory_item_id" in after) || !("unit_price" in after)) return;
+          const wasPriced = !!(before && "inventory_item_id" in before && before.inventory_item_id && "unit_price" in before && before.unit_price != null);
+          const isPricedNow = !!(after.inventory_item_id && after.unit_price != null);
+          if (wasPriced || !isPricedNow) return;
+          // Narrowed into their own consts - TypeScript can't carry the
+          // null-check from the isPricedNow boolean back onto
+          // after.inventory_item_id/after.unit_price directly.
+          const inventoryItemId: string = after.inventory_item_id!;
+          const newPriceValue: number = after.unit_price!;
+
+          const { data: prior } = await supabase
+            .from("invoice_line_items")
+            .select("unit_price, invoices!inner(invoice_date, restaurant_id)")
+            .eq("inventory_item_id", inventoryItemId)
+            .eq("invoices.restaurant_id", restaurantId)
+            .not("unit_price", "is", null)
+            .neq("id", after.id)
+            .order("invoice_date", { foreignTable: "invoices", ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (!prior?.unit_price) return; // no prior price to compare against yet
+          const priorPrice = Number(prior.unit_price);
+          const newPrice = Number(newPriceValue);
+          if (priorPrice <= 0) return;
+          const pctChange = ((newPrice - priorPrice) / priorPrice) * 100;
+
+          if (Math.abs(pctChange) >= 10) {
+            const { data: item } = await supabase.from("inventory_items").select("name").eq("id", inventoryItemId).maybeSingle();
+            const direction = pctChange > 0 ? "up" : "down";
+            pushToast(
+              `${item?.name || "An item"}'s price is ${direction} ${Math.abs(Math.round(pctChange))}% — $${priorPrice.toFixed(2)} → $${newPrice.toFixed(2)}.`,
+              pctChange > 0 ? "warning" : "success"
+            );
+          }
+        }
+      )
       .subscribe();
 
     return () => {
