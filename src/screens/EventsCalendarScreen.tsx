@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ChevronLeft, ChevronRight, Plus, Trash2, Repeat, X } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Plus, Trash2, Repeat, X, Sparkles } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
 import Modal from "../components/ui/Modal";
+import AskAgentModal from "./AskAgentModal";
 
 interface DayOccurrence {
   id: string;
@@ -57,6 +58,7 @@ export default function EventsCalendarScreen() {
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [showAskAgent, setShowAskAgent] = useState(false);
 
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
@@ -290,6 +292,19 @@ export default function EventsCalendarScreen() {
             {saving ? "Saving…" : "Add event"}
           </Button>
         </Modal>
+      )}
+
+      {RESTAURANT_ID && (
+        <button
+          onClick={() => setShowAskAgent(true)}
+          className="fixed bottom-5 right-5 w-14 h-14 rounded-full bg-accent border-none flex items-center justify-center cursor-pointer shadow-[0_4px_14px_rgba(30,91,140,0.4)] z-[500]"
+          aria-label="Ask about your calendar"
+        >
+          <Sparkles size={22} color="#FFFFFF" />
+        </button>
+      )}
+      {showAskAgent && RESTAURANT_ID && (
+        <AskAgentModal restaurantId={RESTAURANT_ID} healthyPercent={null} onClose={() => setShowAskAgent(false)} allowEventWrite />
       )}
     </div>
   );
