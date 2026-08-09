@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, X, Send, Loader2, PackagePlus } from "lucide-react";
+import { Sparkles, X, Send, Loader2, PackagePlus, CalendarPlus } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
+import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, good, sans, mono } from "../lib/tokens";
 import type { AutoCreatePOResult, CreatePOWithSupplierResult } from "../lib/rpc-types";
 
@@ -13,10 +14,21 @@ interface ProposedAction {
   unit: string;
 }
 
+interface ProposedEventAction {
+  type: "add_event";
+  event_name: string;
+  recurrence_type: "none" | "weekly" | "monthly" | "yearly" | "yearly_nth_weekday";
+  recurrence_weekday: number | null;
+  recurrence_week_of_month: number | null;
+  event_date: string;
+  remind_days_before: number;
+}
+
 interface ChatMessage {
   role: "user" | "agent";
   text: string;
   proposedAction?: ProposedAction;
+  proposedEventAction?: ProposedEventAction;
   actionStatus?: "pending" | "confirmed" | "dismissed";
   actionResultText?: string;
 }
@@ -25,15 +37,35 @@ interface AskAgentModalProps {
   restaurantId: string;
   healthyPercent: number | null;
   onClose: () => void;
+  // Only true on the events calendar screen - a genuine write capability
+  // (adding a calendar event), so it's opt-in per screen rather than
+  // available everywhere the agent shows up. Menu-item creation is
+  // deliberately NOT included here even on this screen - the edge
+  // function's prompt explicitly tells the model it can only suggest a
+  // dish idea, never propose creating one, since a recipe with real
+  // ingredients and quantities is a much bigger write than a calendar
+  // entry with a name and a date.
+  allowEventWrite?: boolean;
 }
 
-// The agent can now PROPOSE placing an order (see ask-agent/index.ts), but
-// this component is the actual safety boundary in practice: nothing gets
-// created until the person taps Confirm below, and even then it's this
-// same, already-tested auto_create_po_if_needed / vendor-picker flow doing
-// the real work - not the LLM. The LLM only ever supplied an item_id that
-// the edge function already resolved against a real inventory_items row.
-export default function AskAgentModal({ restaurantId, healthyPercent, onClose }: AskAgentModalProps) {
+const RECURRENCE_DESCRIPTIONS: Record<string, string> = {
+  none: "one-time",
+  weekly: "repeats weekly",
+  monthly: "repeats monthly",
+  yearly: "repeats yearly",
+  yearly_nth_weekday: "repeats yearly",
+};
+
+// The agent can PROPOSE placing an order or (on the events screen) adding
+// a calendar event, but this component is the actual safety boundary in
+// practice: nothing gets created until the person taps Confirm below, and
+// even then it's the same already-tested RPCs/tables doing the real work -
+// not the LLM. For events specifically, the edge function already resolved
+// any recurring-holiday date through nth_weekday_of_month() server-side
+// before this ever became something the user could confirm - the LLM only
+// ever supplied the rule (a weekday + which occurrence), never the date.
+export default function AskAgentModal({ restaurantId, healthyPercent, onClose, allowEventWrite = false }: AskAgentModalProps) {
+  const { session } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [asking, setAsking] = useState(false);
@@ -48,28 +80,24 @@ export default function AskAgentModal({ restaurantId, healthyPercent, onClose }:
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, asking]);
 
-  const suggestions = [
-    healthyPercent != null ? `Why is my inventory health at ${healthyPercent}%?` : "How's my inventory looking?",
-    "What should I be worried about today?",
-    "What's about to expire?",
-  ];
+  const suggestions = allowEventWrite
+    ? ["What events are coming up?", "Suggest a Mother's Day special", "Add Father's Day to my calendar"]
+    : [
+        healthyPercent != null ? `Why is my inventory health at ${healthyPercent}%?` : "How's my inventory looking?",
+        "What should I be worried about today?",
+        "What's about to expire?",
+      ];
 
   async function ask(question: string) {
     if (!question.trim() || asking) return;
     setError("");
-    // Captured before the state update below adds this new question, so
-    // it's genuinely the history BEFORE this turn - the last few
-    // exchanges, not the running total, since only recent context matters
-    // for resolving a follow-up like "increase it" and an ever-growing
-    // history would just bloat every request for no benefit past a
-    // certain point.
     const recentHistory = messages.slice(-6).map((m) => ({ role: m.role, text: m.text }));
     setMessages((prev) => [...prev, { role: "user", text: question }]);
     setInput("");
     setAsking(true);
 
     const { data, error: fnError } = await supabase.functions.invoke("ask-agent", {
-      body: { restaurant_id: restaurantId, question, history: recentHistory },
+      body: { restaurant_id: restaurantId, question, history: recentHistory, allow_event_write: allowEventWrite },
     });
 
     if (fnError || !data?.answer) {
@@ -84,7 +112,8 @@ export default function AskAgentModal({ restaurantId, healthyPercent, onClose }:
         role: "agent",
         text: data.answer,
         proposedAction: data.proposed_action || undefined,
-        actionStatus: data.proposed_action ? "pending" : undefined,
+        proposedEventAction: data.proposed_event_action || undefined,
+        actionStatus: data.proposed_action || data.proposed_event_action ? "pending" : undefined,
       },
     ]);
     setAsking(false);
@@ -135,6 +164,32 @@ export default function AskAgentModal({ restaurantId, healthyPercent, onClose }:
     setVendorPickerFor(null);
   }
 
+  async function confirmAddEvent(index: number) {
+    const msg = messages[index];
+    if (!msg.proposedEventAction) return;
+    setConfirmingIndex(index);
+    const e = msg.proposedEventAction;
+
+    const { error: insertError } = await supabase.from("local_events").insert({
+      restaurant_id: restaurantId,
+      event_name: e.event_name,
+      event_date: e.event_date,
+      recurrence_type: e.recurrence_type,
+      recurrence_weekday: e.recurrence_weekday,
+      recurrence_week_of_month: e.recurrence_week_of_month,
+      remind_days_before: e.remind_days_before,
+      created_by_email: session?.user?.email ?? null,
+    });
+
+    if (insertError) {
+      updateMessage(index, { actionStatus: "confirmed", actionResultText: "Couldn't add that event — try again from the calendar directly." });
+    } else {
+      const dateLabel = new Date(e.event_date + "T00:00:00").toLocaleDateString(undefined, { month: "long", day: "numeric" });
+      updateMessage(index, { actionStatus: "confirmed", actionResultText: `Added "${e.event_name}" on ${dateLabel} (${RECURRENCE_DESCRIPTIONS[e.recurrence_type]}).` });
+    }
+    setConfirmingIndex(null);
+  }
+
   function dismissAction(index: number) {
     updateMessage(index, { actionStatus: "dismissed" });
   }
@@ -168,7 +223,9 @@ export default function AskAgentModal({ restaurantId, healthyPercent, onClose }:
           {messages.length === 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <div style={{ fontSize: 13, color: textMuted, marginBottom: 4 }}>
-                Ask anything about your current inventory, orders, or invoices — answers are grounded in your real, live data. You can also ask me to place an order for a specific item.
+                {allowEventWrite
+                  ? "Ask about upcoming events, get a dish idea for a holiday, or ask me to add an event to your calendar."
+                  : "Ask anything about your current inventory, orders, or invoices — answers are grounded in your real, live data. You can also ask me to place an order for a specific item."}
               </div>
               {suggestions.map((s) => (
                 <button
@@ -219,6 +276,35 @@ export default function AskAgentModal({ restaurantId, healthyPercent, onClose }:
                       style={{ flex: 1, background: accent, border: "none", borderRadius: 8, padding: "8px", color: "#FFFFFF", fontWeight: 700, fontSize: 13, cursor: "pointer", opacity: confirmingIndex === i ? 0.6 : 1 }}
                     >
                       {confirmingIndex === i ? "Placing…" : "Confirm order"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {m.proposedEventAction && m.actionStatus === "pending" && (
+                <div style={{ background: "#FFFFFF", border: `1px solid ${accent}`, borderRadius: 10, padding: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, color: accent, marginBottom: 4 }}>
+                    <CalendarPlus size={14} /> Add "{m.proposedEventAction.event_name}"?
+                  </div>
+                  <div style={{ fontSize: 12, color: textMuted, fontFamily: mono, marginBottom: 10 }}>
+                    {new Date(m.proposedEventAction.event_date + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+                    {" · "}
+                    {RECURRENCE_DESCRIPTIONS[m.proposedEventAction.recurrence_type]}
+                    {" · remind "}{m.proposedEventAction.remind_days_before}d before
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={() => dismissAction(i)}
+                      style={{ flex: 1, background: "none", border: "1px solid #E2E6ED", borderRadius: 8, padding: "8px", color: textMuted, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => confirmAddEvent(i)}
+                      disabled={confirmingIndex === i}
+                      style={{ flex: 1, background: accent, border: "none", borderRadius: 8, padding: "8px", color: "#FFFFFF", fontWeight: 700, fontSize: 13, cursor: "pointer", opacity: confirmingIndex === i ? 0.6 : 1 }}
+                    >
+                      {confirmingIndex === i ? "Adding…" : "Confirm add"}
                     </button>
                   </div>
                 </div>
