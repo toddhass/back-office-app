@@ -193,6 +193,8 @@ export default function HomeScreen() {
   const [timeStats, setTimeStats] = useState({ monthCount: 0, totalCount: 0 });
   const [wasteStats, setWasteStats] = useState({ count: 0, value: 0 });
   const [weather, setWeather] = useState<{ condition: string; high: number; low: number; precipChance: number; city: string } | null>(null);
+  const [briefing, setBriefing] = useState<string | null>(null);
+  const [briefingLoading, setBriefingLoading] = useState(true);
   const [upcomingEvents, setUpcomingEvents] = useState<{ id: string; event_name: string; next_occurrence: string; days_until: number; in_reminder_window: boolean }[]>([]);
   const [poSummary, setPoSummary] = useState<{ total: number; openPOs: POSummaryItem[]; partialPOs: POSummaryItem[]; fulfilledPOs: POSummaryItem[] }>({ total: 0, openPOs: [], partialPOs: [], fulfilledPOs: [] });
   const [showPODetail, setShowPODetail] = useState(false);
@@ -254,6 +256,27 @@ export default function HomeScreen() {
       } catch {
         // Non-critical - no card shown is a fine fallback.
       }
+    })();
+    return () => { cancelled = true; };
+  }, [RESTAURANT_ID]);
+
+  // Independent of load() and weather - a real API call (edge function ->
+  // Gemini, plus weather/Steelers fetches on the FIRST call of a given
+  // day) that shouldn't block or be coupled to the rest of Home. The edge
+  // function itself caches per restaurant per day, so this only actually
+  // costs a Gemini call once - every other load that day just reads the
+  // cached row back.
+  useEffect(() => {
+    if (!RESTAURANT_ID) return;
+    let cancelled = false;
+    setBriefingLoading(true);
+    (async () => {
+      const { data, error } = await supabase.functions.invoke("daily-briefing", { body: { restaurant_id: RESTAURANT_ID } });
+      if (cancelled) return;
+      if (!error && data?.content) {
+        setBriefing(data.content);
+      }
+      setBriefingLoading(false);
     })();
     return () => { cancelled = true; };
   }, [RESTAURANT_ID]);
@@ -549,6 +572,22 @@ export default function HomeScreen() {
       </div>
 
       <div style={{ padding: "16px 16px 8px", display: "flex", flexDirection: "column", gap: 10 }}>
+        {(briefing || briefingLoading) && (
+          <div style={{ background: "linear-gradient(135deg, #16202E, #232F40)", borderRadius: 10, padding: "16px 18px", color: "#FFFFFF" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, opacity: 0.85 }}>
+              <Sparkles size={14} />
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase" }}>Today's briefing</span>
+            </div>
+            {briefingLoading ? (
+              <div style={{ fontSize: 13, opacity: 0.75, display: "flex", alignItems: "center", gap: 6 }}>
+                Putting today's briefing together…
+              </div>
+            ) : (
+              <div style={{ fontSize: 14, lineHeight: 1.55, opacity: 0.95 }}>{briefing}</div>
+            )}
+          </div>
+        )}
+
         {!loading && timeStats.totalCount > 0 && (
           <div style={{ background: "linear-gradient(135deg, #1E5B8C, #164569)", borderRadius: 10, padding: "18px 18px", color: "#FFFFFF" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, opacity: 0.85 }}>
