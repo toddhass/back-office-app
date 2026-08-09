@@ -307,6 +307,8 @@ export type Database = {
           notes: string | null
           recurrence_end_date: string | null
           recurrence_type: string
+          recurrence_weekday: number | null
+          recurrence_week_of_month: number | null
           remind_days_before: number
           restaurant_id: string
         }
@@ -319,6 +321,8 @@ export type Database = {
           notes?: string | null
           recurrence_end_date?: string | null
           recurrence_type?: string
+          recurrence_weekday?: number | null
+          recurrence_week_of_month?: number | null
           remind_days_before?: number
           restaurant_id: string
         }
@@ -331,6 +335,8 @@ export type Database = {
           notes?: string | null
           recurrence_end_date?: string | null
           recurrence_type?: string
+          recurrence_weekday?: number | null
+          recurrence_week_of_month?: number | null
           remind_days_before?: number
           restaurant_id?: string
         }
