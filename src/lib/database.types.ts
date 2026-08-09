@@ -510,22 +510,34 @@ export type Database = {
       }
       restaurants: {
         Row: {
+          city: string | null
           created_at: string | null
           id: string
+          latitude: number | null
+          longitude: number | null
           name: string
           onboarding_completed: boolean | null
+          state: string | null
         }
         Insert: {
+          city?: string | null
           created_at?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           name: string
           onboarding_completed?: boolean | null
+          state?: string | null
         }
         Update: {
+          city?: string | null
           created_at?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           name?: string
           onboarding_completed?: boolean | null
+          state?: string | null
         }
         Relationships: []
       }

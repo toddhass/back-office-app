@@ -1,6 +1,6 @@
 import { useEffect, useState, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
-import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity, ChevronDown, ChevronUp, Pencil, Clock, Package, Leaf, ChefHat, Sparkles, ScanLine, X } from "lucide-react";
+import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity, ChevronDown, ChevronUp, Pencil, Clock, Package, Leaf, ChefHat, Sparkles, ScanLine, X, CloudSun, CloudRain, Cloud, CloudSnow, Sun } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, sans, mono } from "../lib/tokens";
@@ -192,6 +192,7 @@ export default function HomeScreen() {
   const [editingParId, setEditingParId] = useState<string | null>(null);
   const [timeStats, setTimeStats] = useState({ monthCount: 0, totalCount: 0 });
   const [wasteStats, setWasteStats] = useState({ count: 0, value: 0 });
+  const [weather, setWeather] = useState<{ condition: string; high: number; low: number; precipChance: number; city: string } | null>(null);
   const [poSummary, setPoSummary] = useState<{ total: number; openPOs: POSummaryItem[]; partialPOs: POSummaryItem[]; fulfilledPOs: POSummaryItem[] }>({ total: 0, openPOs: [], partialPOs: [], fulfilledPOs: [] });
   const [showPODetail, setShowPODetail] = useState(false);
   const [expandedPOCategory, setExpandedPOCategory] = useState<string | null>(null);
@@ -204,6 +205,56 @@ export default function HomeScreen() {
 
   useEffect(() => {
     load();
+  }, [RESTAURANT_ID]);
+
+  // Independent of load() deliberately - weather is a nice-to-have signal,
+  // not core business data, and calling a free public API (no key needed)
+  // shouldn't be coupled to the realtime-driven reload cycle above or
+  // able to block/slow down anything else on this screen if it's briefly
+  // unavailable. Fetches today's real forecast for the restaurant's own
+  // location; silently shows nothing if no location is on file yet
+  // (most restaurants using this app won't have set one up) or if the
+  // fetch fails, rather than showing an error card for a non-critical
+  // feature.
+  useEffect(() => {
+    if (!RESTAURANT_ID) return;
+    let cancelled = false;
+    (async () => {
+      const { data: restaurant } = await supabase
+        .from("restaurants")
+        .select("city, latitude, longitude")
+        .eq("id", RESTAURANT_ID)
+        .maybeSingle();
+      if (!restaurant?.latitude || !restaurant?.longitude || cancelled) return;
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${restaurant.latitude}&longitude=${restaurant.longitude}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&temperature_unit=fahrenheit&timezone=auto&forecast_days=1`;
+        const res = await fetch(url);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const d = data?.daily;
+        if (!d?.weather_code?.[0] && d?.weather_code?.[0] !== 0) return;
+        const WMO: Record<number, string> = {
+          0: "Clear", 1: "Mostly clear", 2: "Partly cloudy", 3: "Overcast",
+          45: "Fog", 48: "Fog", 51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle",
+          61: "Light rain", 63: "Rain", 65: "Heavy rain", 66: "Freezing rain", 67: "Freezing rain",
+          71: "Light snow", 73: "Snow", 75: "Heavy snow", 77: "Snow",
+          80: "Rain showers", 81: "Rain showers", 82: "Heavy showers",
+          85: "Snow showers", 86: "Snow showers", 95: "Thunderstorms", 96: "Thunderstorms", 99: "Thunderstorms",
+        };
+        if (!cancelled) {
+          setWeather({
+            condition: WMO[d.weather_code[0]] || "—",
+            high: Math.round(d.temperature_2m_max[0]),
+            low: Math.round(d.temperature_2m_min[0]),
+            precipChance: d.precipitation_probability_max[0],
+            city: restaurant.city || "",
+          });
+        }
+      } catch {
+        // Non-critical - no card shown is a fine fallback.
+      }
+    })();
+    return () => { cancelled = true; };
   }, [RESTAURANT_ID]);
 
   // Live sync: any change to inventory, invoices, or purchase orders for
@@ -599,6 +650,23 @@ export default function HomeScreen() {
               <div style={{ fontWeight: 600, fontSize: 15 }}>{belowParCount} item{belowParCount > 1 ? "s" : ""} below par</div>
             </div>
             <AlertTriangle size={14} color={accent} />
+          </button>
+        )}
+
+        {weather && (
+          <button
+            onClick={() => setShowAskAgent(true)}
+            style={{ width: "100%", textAlign: "left", background: card, border: "1px solid #E2E6ED", borderRadius: 10, padding: "14px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}
+          >
+            {weather.precipChance >= 40 ? <CloudRain size={26} color={accent} /> : weather.high <= 45 ? <CloudSnow size={26} color={accent} /> : weather.condition.includes("Clear") ? <Sun size={26} color={accent} /> : weather.condition.includes("Overcast") || weather.condition.includes("cloudy") ? <Cloud size={26} color={textMuted} /> : <CloudSun size={26} color={accent} />}
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: textPrimary }}>
+                {weather.condition}, {weather.high}° / {weather.low}°{weather.city ? ` in ${weather.city}` : ""}
+              </div>
+              <div style={{ fontSize: 11.5, color: textMuted, marginTop: 1 }}>
+                {weather.precipChance}% chance of rain · Ask the agent how this should affect you →
+              </div>
+            </div>
           </button>
         )}
 
