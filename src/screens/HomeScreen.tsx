@@ -7,7 +7,6 @@ import { card, textPrimary, textMuted, accent, danger, good, sans, mono } from "
 import type { Database } from "../lib/database.types";
 import type { AutoCreatePOResult, CreatePOWithSupplierResult } from "../lib/rpc-types";
 import AskAgentModal from "./AskAgentModal";
-const LocalEventsModal = lazy(() => import("./LocalEventsModal"));
 
 // Lazy-loaded: @zxing/browser (needed for real barcode decoding, not just
 // jsQR's QR codes) adds ~450kB to the bundle on its own - nearly doubling
@@ -195,7 +194,6 @@ export default function HomeScreen() {
   const [wasteStats, setWasteStats] = useState({ count: 0, value: 0 });
   const [weather, setWeather] = useState<{ condition: string; high: number; low: number; precipChance: number; city: string } | null>(null);
   const [upcomingEvents, setUpcomingEvents] = useState<{ id: string; event_name: string; next_occurrence: string; days_until: number; in_reminder_window: boolean }[]>([]);
-  const [showLocalEvents, setShowLocalEvents] = useState(false);
   const [poSummary, setPoSummary] = useState<{ total: number; openPOs: POSummaryItem[]; partialPOs: POSummaryItem[]; fulfilledPOs: POSummaryItem[] }>({ total: 0, openPOs: [], partialPOs: [], fulfilledPOs: [] });
   const [showPODetail, setShowPODetail] = useState(false);
   const [expandedPOCategory, setExpandedPOCategory] = useState<string | null>(null);
@@ -689,7 +687,7 @@ export default function HomeScreen() {
               </div>
             ))}
             <button
-              onClick={() => setShowLocalEvents(true)}
+              onClick={() => navigate("/events")}
               style={{ background: "none", border: "none", padding: 0, marginTop: 6, color: accent, fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}
             >
               Manage local events →
@@ -697,7 +695,7 @@ export default function HomeScreen() {
           </div>
         ) : (
           <button
-            onClick={() => setShowLocalEvents(true)}
+            onClick={() => navigate("/events")}
             style={{ width: "100%", textAlign: "left", background: "none", border: "1px dashed #D6DCE5", borderRadius: 10, padding: "10px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, color: textMuted, fontSize: 12.5 }}
           >
             <Calendar size={15} color={textMuted} />
@@ -876,11 +874,6 @@ export default function HomeScreen() {
 
         {showAskAgent && RESTAURANT_ID && (
           <AskAgentModal restaurantId={RESTAURANT_ID} healthyPercent={healthyPct} onClose={() => setShowAskAgent(false)} />
-        )}
-        {showLocalEvents && RESTAURANT_ID && (
-          <Suspense fallback={null}>
-            <LocalEventsModal restaurantId={RESTAURANT_ID} onClose={() => setShowLocalEvents(false)} />
-          </Suspense>
         )}
         {showBarcodeScanner && RESTAURANT_ID && (
           <Suspense fallback={null}>

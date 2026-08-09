@@ -1027,6 +1027,16 @@ export type Database = {
         Args: { p_exclude_line_item_id: string; p_inventory_item_id: string; p_restaurant_id: string }
         Returns: number
       }
+      get_local_events_in_range: {
+        Args: { p_restaurant_id: string; p_start_date: string; p_end_date: string }
+        Returns: {
+          id: string
+          event_name: string
+          notes: string | null
+          recurrence_type: string
+          occurrence_date: string
+        }[]
+      }
       get_upcoming_local_events: {
         Args: { p_restaurant_id: string; p_within_days?: number }
         Returns: {

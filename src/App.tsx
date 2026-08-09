@@ -8,6 +8,7 @@ import InvoicesScreen from "./screens/InvoicesScreen";
 import DigestScreen from "./screens/DigestScreen";
 import KitchenScreen from "./screens/KitchenScreen";
 import MenuScreen from "./screens/MenuScreen";
+import EventsCalendarScreen from "./screens/EventsCalendarScreen";
 import LoginScreen from "./screens/LoginScreen";
 import OnboardingScreen from "./screens/OnboardingScreen";
 import { useAuth } from "./lib/AuthContext";
@@ -181,6 +182,7 @@ export default function App() {
       <Route path="/kitchen" element={<KitchenScreen />} />
       <Route path="/menu" element={<MenuScreen />} />
       <Route path="/menu/:dishId" element={<MenuScreen />} />
+      <Route path="/events" element={<EventsCalendarScreen />} />
     </Routes>
   );
 
