@@ -1,12 +1,13 @@
 import { useEffect, useState, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
-import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity, ChevronDown, ChevronUp, Pencil, Clock, Package, Leaf, ChefHat, Sparkles, ScanLine, X, CloudSun, CloudRain, Cloud, CloudSnow, Sun } from "lucide-react";
+import { Receipt, ClipboardList, Camera, AlertTriangle, CheckCircle2, LogOut, TrendingDown, Activity, ChevronDown, ChevronUp, Pencil, Clock, Package, Leaf, ChefHat, Sparkles, ScanLine, X, CloudSun, CloudRain, Cloud, CloudSnow, Sun, Calendar } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { card, textPrimary, textMuted, accent, danger, good, sans, mono } from "../lib/tokens";
 import type { Database } from "../lib/database.types";
 import type { AutoCreatePOResult, CreatePOWithSupplierResult } from "../lib/rpc-types";
 import AskAgentModal from "./AskAgentModal";
+const LocalEventsModal = lazy(() => import("./LocalEventsModal"));
 
 // Lazy-loaded: @zxing/browser (needed for real barcode decoding, not just
 // jsQR's QR codes) adds ~450kB to the bundle on its own - nearly doubling
@@ -193,6 +194,8 @@ export default function HomeScreen() {
   const [timeStats, setTimeStats] = useState({ monthCount: 0, totalCount: 0 });
   const [wasteStats, setWasteStats] = useState({ count: 0, value: 0 });
   const [weather, setWeather] = useState<{ condition: string; high: number; low: number; precipChance: number; city: string } | null>(null);
+  const [upcomingEvents, setUpcomingEvents] = useState<{ id: string; event_name: string; next_occurrence: string; days_until: number; in_reminder_window: boolean }[]>([]);
+  const [showLocalEvents, setShowLocalEvents] = useState(false);
   const [poSummary, setPoSummary] = useState<{ total: number; openPOs: POSummaryItem[]; partialPOs: POSummaryItem[]; fulfilledPOs: POSummaryItem[] }>({ total: 0, openPOs: [], partialPOs: [], fulfilledPOs: [] });
   const [showPODetail, setShowPODetail] = useState(false);
   const [expandedPOCategory, setExpandedPOCategory] = useState<string | null>(null);
@@ -271,6 +274,7 @@ export default function HomeScreen() {
       .on("postgres_changes", { event: "*", schema: "public", table: "purchase_orders", filter: `restaurant_id=eq.${RESTAURANT_ID}` }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "purchase_order_items" }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "waste_saved_log", filter: `restaurant_id=eq.${RESTAURANT_ID}` }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "local_events", filter: `restaurant_id=eq.${RESTAURANT_ID}` }, () => load())
       .subscribe();
 
     return () => {
@@ -416,6 +420,9 @@ export default function HomeScreen() {
       partialPOs: (pos || []).filter((p) => p.status === "partial").map((p) => allPOs.find((a) => a.id === p.id)).filter((p): p is POSummaryItem => p !== undefined),
       fulfilledPOs: (pos || []).filter((p) => p.status === "fulfilled").map((p) => allPOs.find((a) => a.id === p.id)).filter((p): p is POSummaryItem => p !== undefined),
     });
+
+    const { data: events } = await supabase.rpc("get_upcoming_local_events", { p_restaurant_id: RESTAURANT_ID, p_within_days: 14 });
+    setUpcomingEvents(events || []);
 
     setLoading(false);
   }
@@ -670,6 +677,34 @@ export default function HomeScreen() {
           </button>
         )}
 
+        {upcomingEvents.filter((e) => e.in_reminder_window).length > 0 ? (
+          <div style={{ background: card, border: `1px solid ${accent}`, borderRadius: 10, padding: "14px 16px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <Calendar size={16} color={accent} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: textPrimary }}>Coming up</span>
+            </div>
+            {upcomingEvents.filter((e) => e.in_reminder_window).map((e) => (
+              <div key={e.id} style={{ fontSize: 12.5, color: textMuted, marginBottom: 2 }}>
+                <span style={{ color: textPrimary, fontWeight: 500 }}>{e.event_name}</span> — {e.days_until === 0 ? "today" : e.days_until === 1 ? "tomorrow" : `in ${e.days_until} days`}
+              </div>
+            ))}
+            <button
+              onClick={() => setShowLocalEvents(true)}
+              style={{ background: "none", border: "none", padding: 0, marginTop: 6, color: accent, fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}
+            >
+              Manage local events →
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowLocalEvents(true)}
+            style={{ width: "100%", textAlign: "left", background: "none", border: "1px dashed #D6DCE5", borderRadius: 10, padding: "10px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, color: textMuted, fontSize: 12.5 }}
+          >
+            <Calendar size={15} color={textMuted} />
+            {upcomingEvents.length > 0 ? "No local events due soon" : "Add a local event (graduation, festival…)"} · Manage →
+          </button>
+        )}
+
         {!loading && health.total > 0 && (
           <div style={{ background: card, border: "1px solid #E2E6ED", borderRadius: 10, padding: "16px 18px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
@@ -841,6 +876,11 @@ export default function HomeScreen() {
 
         {showAskAgent && RESTAURANT_ID && (
           <AskAgentModal restaurantId={RESTAURANT_ID} healthyPercent={healthyPct} onClose={() => setShowAskAgent(false)} />
+        )}
+        {showLocalEvents && RESTAURANT_ID && (
+          <Suspense fallback={null}>
+            <LocalEventsModal restaurantId={RESTAURANT_ID} onClose={() => setShowLocalEvents(false)} />
+          </Suspense>
         )}
         {showBarcodeScanner && RESTAURANT_ID && (
           <Suspense fallback={null}>

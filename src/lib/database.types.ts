@@ -297,6 +297,53 @@ export type Database = {
           },
         ]
       }
+      local_events: {
+        Row: {
+          created_at: string | null
+          created_by_email: string | null
+          event_date: string
+          event_name: string
+          id: string
+          notes: string | null
+          recurrence_end_date: string | null
+          recurrence_type: string
+          remind_days_before: number
+          restaurant_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by_email?: string | null
+          event_date: string
+          event_name: string
+          id?: string
+          notes?: string | null
+          recurrence_end_date?: string | null
+          recurrence_type?: string
+          remind_days_before?: number
+          restaurant_id: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by_email?: string | null
+          event_date?: string
+          event_name?: string
+          id?: string
+          notes?: string | null
+          recurrence_end_date?: string | null
+          recurrence_type?: string
+          remind_days_before?: number
+          restaurant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "local_events_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       menu_items: {
         Row: {
           category: string | null
@@ -979,6 +1026,19 @@ export type Database = {
       get_prior_price: {
         Args: { p_exclude_line_item_id: string; p_inventory_item_id: string; p_restaurant_id: string }
         Returns: number
+      }
+      get_upcoming_local_events: {
+        Args: { p_restaurant_id: string; p_within_days?: number }
+        Returns: {
+          id: string
+          event_name: string
+          notes: string | null
+          recurrence_type: string
+          remind_days_before: number
+          next_occurrence: string
+          days_until: number
+          in_reminder_window: boolean
+        }[]
       }
       log_waste: {
         Args: {
