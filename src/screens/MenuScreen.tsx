@@ -192,7 +192,7 @@ export default function MenuScreen() {
     setIngredientMode("existing");
     setNewIngredientId("");
     setNewIngredientQty("");
-    setNewIngredientUnit("");
+    setNewIngredientUnit("g");
     setNewIngredientNotes("");
     setNewItemName("");
     setNewItemPar("");
@@ -294,7 +294,11 @@ export default function MenuScreen() {
   function openEditIngredient(ri: RecipeIngredient) {
     setEditingIngredient(ri);
     setEditQuantity(String(ri.quantity));
-    setEditUnit(ri.unit || ri.inventory_items?.unit || "");
+    // Falls back to grams, not the inventory item's own purchase unit
+    // (e.g. "lb", "case") - that fallback was part of the original bug,
+    // and now that unit is a locked g/ml dropdown, it needs a value the
+    // dropdown actually offers.
+    setEditUnit(ri.unit === "ml" ? "ml" : "g");
     setEditNotes(ri.notes || "");
   }
 
@@ -453,12 +457,14 @@ export default function MenuScreen() {
                   onChange={(e) => setEditQuantity(e.target.value)}
                   className="flex-1 bg-input-bg border border-border-strong rounded-lg px-3 py-2.5 text-sm text-ink"
                 />
-                <input
-                  placeholder="Unit — e.g. g, ml, cups"
+                <select
                   value={editUnit}
                   onChange={(e) => setEditUnit(e.target.value)}
                   className="flex-1 bg-input-bg border border-border-strong rounded-lg px-3 py-2.5 text-sm text-ink"
-                />
+                >
+                  <option value="g">g</option>
+                  <option value="ml">ml</option>
+                </select>
               </div>
               <input
                 placeholder="Notes (optional) — e.g. diced, garnish"
@@ -501,8 +507,13 @@ export default function MenuScreen() {
                 value={newIngredientId}
                 onChange={(e) => {
                   setNewIngredientId(e.target.value);
-                  const item = inventoryItems.find((i) => i.id === e.target.value);
-                  if (item) setNewIngredientUnit(item.unit);
+                  // Deliberately NOT auto-filled from the item's own
+                  // purchase unit (e.g. "case", "lb") - that's a
+                  // different unit than the recipe's per-serving amount
+                  // needs, and was the exact root cause of a real
+                  // Cups/Dozen-style bug found earlier. Grams is the
+                  // sensible default either way.
+                  if (!newIngredientUnit) setNewIngredientUnit("g");
                 }}
                 className="w-full bg-input-bg border border-border-strong rounded-lg px-3 py-2.5 text-sm text-ink mb-2"
               >
@@ -549,12 +560,14 @@ export default function MenuScreen() {
                 onChange={(e) => setNewIngredientQty(e.target.value)}
                 className="flex-1 bg-input-bg border border-border-strong rounded-lg px-3 py-2.5 text-sm text-ink"
               />
-              <input
-                placeholder="Unit"
+              <select
                 value={newIngredientUnit}
                 onChange={(e) => setNewIngredientUnit(e.target.value)}
                 className="w-24 bg-input-bg border border-border-strong rounded-lg px-3 py-2.5 text-sm text-ink"
-              />
+              >
+                <option value="g">g</option>
+                <option value="ml">ml</option>
+              </select>
             </div>
             <input
               placeholder="Notes (optional) — e.g. diced, garnish"
