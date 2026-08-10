@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { UtensilsCrossed, Plus, ArrowLeft, X, Trash2, Sparkles } from "lucide-react";
+import { UtensilsCrossed, Plus, ArrowLeft, X, Trash2, Sparkles, Pencil } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import type { Tables } from "../lib/database.types";
@@ -58,6 +58,11 @@ export default function MenuScreen() {
   const [newDishPrice, setNewDishPrice] = useState("");
   const [addingDish, setAddingDish] = useState(false);
   const [showAddIngredient, setShowAddIngredient] = useState(false);
+  const [editingIngredient, setEditingIngredient] = useState<RecipeIngredient | null>(null);
+  const [editQuantity, setEditQuantity] = useState("");
+  const [editUnit, setEditUnit] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   // "existing" picks from inventoryItems via the dropdown; "new" creates a
   // brand-new inventory_items row first (e.g. salt, or anything never
@@ -286,6 +291,25 @@ export default function MenuScreen() {
     loadRecipe(selectedItem.id);
   }
 
+  function openEditIngredient(ri: RecipeIngredient) {
+    setEditingIngredient(ri);
+    setEditQuantity(String(ri.quantity));
+    setEditUnit(ri.unit || ri.inventory_items?.unit || "");
+    setEditNotes(ri.notes || "");
+  }
+
+  async function saveIngredientEdit() {
+    if (!selectedItem || !editingIngredient || !editQuantity) return;
+    setSavingEdit(true);
+    await supabase
+      .from("recipe_ingredients")
+      .update({ quantity: Number(editQuantity), unit: editUnit || null, notes: editNotes.trim() || null })
+      .eq("id", editingIngredient.id);
+    setSavingEdit(false);
+    setEditingIngredient(null);
+    loadRecipe(selectedItem.id);
+  }
+
   // Grouped by category for the list view - items with no category land
   // under "Uncategorized" rather than being silently dropped.
   const grouped = menuItems.reduce<Record<string, MenuItem[]>>((acc, item) => {
@@ -404,11 +428,49 @@ export default function MenuScreen() {
                   {ri.notes && ` · ${ri.notes}`}
                 </div>
               </div>
-              <button onClick={() => removeIngredient(ri.id)} className="bg-transparent border-none cursor-pointer text-slate p-1">
-                <Trash2 size={15} />
-              </button>
+              <div className="flex items-center gap-1">
+                <button onClick={() => openEditIngredient(ri)} className="bg-transparent border-none cursor-pointer text-slate p-1">
+                  <Pencil size={14} />
+                </button>
+                <button onClick={() => removeIngredient(ri.id)} className="bg-transparent border-none cursor-pointer text-slate p-1">
+                  <Trash2 size={15} />
+                </button>
+              </div>
             </Card>
           ))}
+
+          {editingIngredient && (
+            <Modal onClose={() => setEditingIngredient(null)} maxWidth={340}>
+              <div className="text-xs uppercase tracking-wide text-slate mb-3">
+                Edit {editingIngredient.inventory_items?.name || "ingredient"}
+              </div>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="number"
+                  step="any"
+                  placeholder="Quantity"
+                  value={editQuantity}
+                  onChange={(e) => setEditQuantity(e.target.value)}
+                  className="flex-1 bg-input-bg border border-border-strong rounded-lg px-3 py-2.5 text-sm text-ink"
+                />
+                <input
+                  placeholder="Unit — e.g. g, ml, cups"
+                  value={editUnit}
+                  onChange={(e) => setEditUnit(e.target.value)}
+                  className="flex-1 bg-input-bg border border-border-strong rounded-lg px-3 py-2.5 text-sm text-ink"
+                />
+              </div>
+              <input
+                placeholder="Notes (optional) — e.g. diced, garnish"
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                className="w-full bg-input-bg border border-border-strong rounded-lg px-3 py-2.5 text-sm text-ink mb-3"
+              />
+              <Button onClick={saveIngredientEdit} disabled={savingEdit || !editQuantity} className="w-full">
+                {savingEdit ? "Saving…" : "Save"}
+              </Button>
+            </Modal>
+          )}
 
           <Button variant="secondary" onClick={() => setShowAddIngredient(true)} className="mt-2 flex items-center justify-center gap-1.5">
             <Plus size={15} /> Add ingredient
