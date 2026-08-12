@@ -463,6 +463,7 @@ export default function MenuScreen() {
                   className="flex-1 bg-input-bg border border-border-strong rounded-lg px-3 py-2.5 text-sm text-ink"
                 >
                   <option value="g">g</option>
+                  <option value="kg">kg</option>
                   <option value="ml">ml</option>
                 </select>
               </div>
@@ -566,6 +567,7 @@ export default function MenuScreen() {
                 className="w-24 bg-input-bg border border-border-strong rounded-lg px-3 py-2.5 text-sm text-ink"
               >
                 <option value="g">g</option>
+                <option value="kg">kg</option>
                 <option value="ml">ml</option>
               </select>
             </div>
